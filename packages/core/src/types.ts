@@ -11,13 +11,25 @@ export type Product = {
   categoryId: number;
 };
 
-/** Primary placements are core tier; secondary (end-caps, promos) are display tier. */
+/**
+ * Source record. Exactly one placement per product is primary; the rest (end-caps,
+ * promos) are display tier. The access node is not stored here: it comes from
+ * `Shelf.accessNodeId` for `shelfId`, derived at build time.
+ */
 export type Placement = {
   ean: string;
   shelfId: string;
   shelfLevel?: number; // for finding, not for routing
-  nodeId: string; // resolved access node in the walk graph
   isPrimary: boolean;
+};
+
+/** Core tier (placements-primary.json): EAN → what routing needs for that product. */
+export type PrimaryPlacements = Record<string, { nodeId: string; categoryId: number }>;
+
+/** Core tier, hand-maintained. The only way a generic list entry resolves to a node. */
+export type CategoryPlacement = {
+  categoryId: number;
+  nodeId: string;
 };
 
 export type Category = {
@@ -76,18 +88,27 @@ export type ListItem =
 
 // ── Route ────────────────────────────────────────────────────
 
-export type RouteStop = {
-  order: number; // 1, 2, 3… — pin number and list number
+export type RoutePoint = {
   nodeId: string;
   x: number; // copied from the node, so the map needs no graph lookup
   y: number;
-  items: ListItem[]; // everything picked up here; items at one shelf share a stop
-  leg: [number, number][]; // path from the previous stop to this one
+};
+
+export type RouteLeg = {
+  leg: [number, number][]; // path from the previous point to this one
   legDistance: number; // metres
 };
 
+export type RouteStop = RoutePoint &
+  RouteLeg & {
+    order: number; // 1, 2, 3… — pin number and list number
+    items: ListItem[]; // everything picked up here; items at one shelf share a stop
+  };
+
 export type Route = {
-  stops: RouteStop[]; // entrance first, checkout last
-  totalDistance: number; // sum of legDistance
+  start: RoutePoint; // entrance
+  stops: RouteStop[]; // item stops only, so `order` runs 1..n
+  end: RoutePoint & RouteLeg; // checkout, reached from the last stop
+  totalDistance: number; // sum of every legDistance, including `end`
   estimatedMinutes: number;
 };

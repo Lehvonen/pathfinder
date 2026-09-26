@@ -20,6 +20,12 @@ importers:
       eslint-config-prettier:
         specifier: ^10.1.8
         version: 10.1.8(eslint@10.11.0)
+      eslint-plugin-react-hooks:
+        specifier: ^7.1.1
+        version: 7.1.1(eslint@10.11.0)
+      eslint-plugin-react-refresh:
+        specifier: ^0.5.7
+        version: 0.5.7(eslint@10.11.0)
       globals:
         specifier: ^17.12.0
         version: 17.12.0
@@ -51,9 +57,6 @@ importers:
         specifier: ^19.2.8
         version: 19.3.0(react@19.3.0)
     devDependencies:
-      '@eslint/js':
-        specifier: ^10.0.1
-        version: 10.0.1(eslint@10.11.0)
       '@types/node':
         specifier: ^24.13.3
         version: 24.19.0
@@ -66,24 +69,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^6.1.1
         version: 6.1.1(vite@8.3.1(@types/node@24.19.0)(yaml@2.9.1))
-      eslint:
-        specifier: ^10.10.0
-        version: 10.11.0
-      eslint-plugin-react-hooks:
-        specifier: ^7.1.1
-        version: 7.1.1(eslint@10.11.0)
-      eslint-plugin-react-refresh:
-        specifier: ^0.5.6
-        version: 0.5.7(eslint@10.11.0)
-      globals:
-        specifier: ^17.12.0
-        version: 17.12.0
       typescript:
         specifier: ^6.0.0
         version: 6.0.3
-      typescript-eslint:
-        specifier: ^8.69.0
-        version: 8.70.1(eslint@10.11.0)(typescript@6.0.3)
       vite:
         specifier: ^8.3.0
         version: 8.3.1(@types/node@24.19.0)(yaml@2.9.1)
@@ -100,9 +88,6 @@ importers:
         specifier: ^19.2.8
         version: 19.3.0(react@19.3.0)
     devDependencies:
-      '@eslint/js':
-        specifier: ^10.0.1
-        version: 10.0.1(eslint@10.11.0)
       '@types/node':
         specifier: ^24.13.3
         version: 24.19.0
@@ -115,24 +100,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^6.1.1
         version: 6.1.1(vite@8.3.1(@types/node@24.19.0)(yaml@2.9.1))
-      eslint:
-        specifier: ^10.10.0
-        version: 10.11.0
-      eslint-plugin-react-hooks:
-        specifier: ^7.1.1
-        version: 7.1.1(eslint@10.11.0)
-      eslint-plugin-react-refresh:
-        specifier: ^0.5.6
-        version: 0.5.7(eslint@10.11.0)
-      globals:
-        specifier: ^17.12.0
-        version: 17.12.0
       typescript:
         specifier: ^6.0.0
         version: 6.0.3
-      typescript-eslint:
-        specifier: ^8.69.0
-        version: 8.70.1(eslint@10.11.0)(typescript@6.0.3)
       vite:
         specifier: ^8.3.0
         version: 8.3.1(@types/node@24.19.0)(yaml@2.9.1)

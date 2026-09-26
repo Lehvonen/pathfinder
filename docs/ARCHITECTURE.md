@@ -65,7 +65,7 @@ in the browser.
 ┌────────────────────┐        ┌──────────────────────┐
 │   data/ bundles    │◄───────│  Map Editor (React)  │
 │  core: graph, plan,│        │  internal tool       │
-│  placements, index │        │  graph.json,         │
+│  placements, index │        │  data/graph/*.json,  │
 └─────────┬──────────┘        │  floorplan.svg       │
           │                   └──────────────────────┘
           │ bundled at build
@@ -126,7 +126,7 @@ Revisit only after submission, if the app is actually being used.
 | Persistence        | `localStorage` (lists) + IndexedDB (display records)       | Lists are tiny; full product records should not sit in JS heap |
 | PWA                | `vite-plugin-pwa`                                          | Manifest + service worker with minimal config                  |
 | Scraper            | Python + `httpx` + `selectolax`                            | Better ergonomics for scraping and cleanup                     |
-| Hosting            | Netlify or Vercel, free tier                               | Static deploy, HTTPS included (required for PWA)               |
+| Hosting            | Netlify, free tier                                         | Static deploy, HTTPS included (required for PWA)               |
 
 **Deliberately not used:**
 
@@ -157,7 +157,7 @@ Revisit only after submission, if the app is actually being used.
 ├── scripts/
 │   ├── validate-data.ts     Zod schemas + graph integrity checks
 │   ├── build-data.ts        scraper output → data/build/, stamps version
-│   └── seed-synthetic.ts    deterministic 30k-product / 400-node fixture
+│   └── seed-synthetic.ts    deterministic 30k-product / 400-node fixture (planned)
 │
 ├── .env.example             committed; VITE_DATA_SOURCE etc.
 │
@@ -179,25 +179,27 @@ Revisit only after submission, if the app is actually being used.
 │       │   ├── graph.json
 │       │   ├── floorplan.svg
 │       │   ├── categories.json
-│       │   ├── placements-primary.json   EAN → nodeId
+│       │   ├── placements-primary.json   EAN → { nodeId, categoryId }
+│       │   ├── category-placements.json  categoryId → nodeId, resolves generic entries
 │       │   ├── aliases.json
-│       │   └── search-index.json         prebuilt FlexSearch export
+│       │   └── search-index.json         prebuilt FlexSearch export, payload { ean, name }
 │       └── display/         lazy-loaded, unbudgeted
 │           ├── products.json             full records, keyed on EAN
 │           └── placements-secondary.json end-caps, promo spots
 │
 ├── packages/
 │   ├── core/                shared, framework-free, unit-tested
-│   │   ├── types.ts         the data contract — see docs/plans/contract.md
-│   │   ├── geometry.ts      pure geometry: lengths, bounds, fit-to-view
-│   │   ├── dijkstra.ts
-│   │   ├── tsp.ts
-│   │   └── route.ts         orchestration: list → Route
-│   └── map-render/          React SVG components shared by both apps
+│   │   └── src/
+│   │       ├── types.ts     the data contract — see docs/plans/contract.md
+│   │       ├── geometry.ts  pure geometry: lengths, bounds, fit-to-view
+│   │       ├── dijkstra.ts
+│   │       ├── tsp.ts
+│   │       └── route.ts     orchestration: list → Route
+│   └── map-render/          React SVG components shared by both apps (planned)
 │
 └── apps/
     ├── web/                 the shopping app
-    └── map-editor/          internal tool, not deployed publicly
+    └── map-editor/          internal tool, local-only, never deployed
 ```
 
 Putting the algorithms in `packages/core` means both apps share the same code and
@@ -209,7 +211,7 @@ Agent configuration lives in the repository, not in six people's local setups.
 Committed, reviewed and versioned like any other code.
 
 - **`rules.md`** — the architectural invariants an agent must not violate: EAN is the
-  key, the core tier is budgeted, generic entries collapse to their primary placement
+  key, the core tier is budgeted, generic entries resolve through `CategoryPlacement`
   before routing, no backend, agents propose and humans commit. Short, and updated when
   a decision in §17 changes.
 - **`agents/`** — subagent definitions. Reviewing, not writing: agents report findings
@@ -217,7 +219,7 @@ Committed, reviewed and versioned like any other code.
 - **`skills/`** — skill definitions for the repeatable procedures in this document, such
   as running `data:build` and interpreting the budget report.
 
-Set up in Phase 0 and grown as the project reveals what is actually worth automating.
+Set up in week 1 and grown as the project reveals what is actually worth automating.
 The point is that six people get the same behaviour from the same tools.
 
 ### `docs/` — this document and what follows it
@@ -229,7 +231,7 @@ what the system is meant to be.
 markdown file per feature or work package, written before the code and committed
 alongside it. They record how a piece was approached and why, at a level this document
 deliberately does not descend to. Cheap to write, and they are what the report gets
-drafted from in Phase 8 instead of reconstructing eight weeks of decisions from memory.
+drafted from at the end instead of reconstructing eight weeks of decisions from memory.
 
 ---
 
@@ -238,7 +240,8 @@ drafted from in Phase 8 instead of reconstructing eight weeks of decisions from 
 ### Core types
 
 The source of truth is `packages/core/src/types.ts`; the reasoning is in
-`docs/plans/contract.md`. The types are not repeated here, so the two cannot drift apart.
+`docs/plans/contract.md`. The types are not repeated here. The key decisions are
+summarised in §17, but where the two differ, `types.ts` is authoritative.
 
 ---
 
@@ -249,8 +252,11 @@ The source of truth is `packages/core/src/types.ts`; the reasoning is in
   copy are discarded during normalisation. Prices and stock levels are out of scope
   (§2), and the catalogue is precached onto phones, so every unused field is dead
   weight shipped to every user. See the data budget in §14.
-- **Placements are one-to-many.** A product can appear in its home aisle, on a
-  promotional end-cap, and in a cooler near the checkout.
+- **Placements are one-to-many, with exactly one primary.** A product can appear in
+  its home aisle, on a promotional end-cap, and in a cooler near the checkout. Exactly
+  one of those is `isPrimary`; that is the one routing uses.
+- **A placement names a shelf, not a node.** The access node comes from the shelf's
+  `accessNodeId` in the graph, derived at build time, so the two cannot disagree.
 - **`temperature` on category** drives the frozen-last routing constraint.
 - **Both entry kinds are supported; generic is the default.** People write "maito",
   not a specific SKU, and which carton gets picked is decided at the shelf. Forcing
@@ -259,15 +265,16 @@ The source of truth is `packages/core/src/types.ts`; the reasoning is in
   lookup and for cases where the exact product matters. Search surfaces category
   matches above product matches for generic queries.
 
-- **Generic entries resolve to their primary placement node before routing.** A
-  generic entry is in principle satisfiable at several nodes, since milk sits both
-  in the dairy aisle and in the cooler by the checkout. Letting the router choose
-  turns the problem into a _generalised_ TSP, where each stop is a set of candidate
-  nodes rather than a single node, which is meaningfully harder.
+- **Generic entries resolve to a single node before routing.** A generic entry is in
+  principle satisfiable at several nodes, since milk sits both in the dairy aisle and
+  in the cooler by the checkout. Letting the router choose turns the problem into a
+  _generalised_ TSP, where each stop is a set of candidate nodes rather than a single
+  node, which is meaningfully harder.
 
-  The MVP therefore collapses each generic entry to `isPrimary: true` before the
-  route is computed. The generalised version is documented as future work in the
-  report — an identified limitation, not an unnoticed one.
+  The MVP therefore resolves each generic entry through `CategoryPlacement`
+  (`categoryId → nodeId`, hand-maintained) before the route is computed. That is the
+  only resolution path for generic entries. The generalised version is documented as
+  future work in the report — an identified limitation, not an unnoticed one.
 
 ---
 
@@ -277,14 +284,15 @@ The source of truth is `packages/core/src/types.ts`; the reasoning is in
    `scraper/cache/`. Development never re-hits the site.
 2. `normalise.py` parses the cache into `products`, `placements`, `categories`,
    deduplicating on EAN.
-3. Shelf IDs are matched against `graph.json`. **Unmatched shelf IDs are logged as
-   errors, not silently dropped** — this list is the handoff between the data owner
-   and the map owner.
+3. Shelf IDs are matched against the shelves in `graph.json`, and each placement's
+   access node is taken from the matched shelf. **Unmatched shelf IDs are logged as
+   errors, not silently dropped** — this list is the handoff between the data work
+   and the map work.
 4. `diff.py` compares against the previous scrape and reports what moved, appeared,
    or disappeared. Stores rearrange; this is how you notice.
 5. `build-data.ts` **builds the FlexSearch index and exports it**, so the app never
-   constructs an index at startup. The index carries names and aliases only, with the
-   EAN as its sole payload.
+   constructs an index at startup. The index carries names and aliases only, with
+   `{ ean, name }` as its payload, so a result can be rendered without the display tier.
 6. Output is **split into core and display tiers** (§14) and written to `data/build/`,
    committed, so the app build is reproducible. `manifest.json` records the gzipped
    size of each chunk.
@@ -318,12 +326,17 @@ Go schematic and do not revisit it. Time saved here goes into the walk graph ins
 The one place to spend extra care is connectivity **around department boundaries and
 the checkout area**, since a missing edge there causes a visibly stupid detour.
 
-### Edge weights — pace counting
+### Edge weights — geometric placeholder, pace counts override
+
+Until an edge has been walked, its weight defaults to the straight-line distance
+between its two nodes in the schematic coordinates. That is good enough to route
+against, but on a schematic map it is only an approximation.
 
 Do not measure the store. During the verification walk, count steps per aisle segment
-and multiply by stride length. That yields weights accurate to roughly 10%, which is
-more than enough for route optimisation and good enough to display "about 640 m,
-12 minutes" without embarrassment.
+and multiply by stride length. A paced weight **replaces** the geometric default for
+that edge. That yields weights accurate to roughly 10%, which is more than enough for
+route optimisation and good enough to display "about 640 m, 12 minutes" without
+embarrassment.
 
 ### Map Editor
 
@@ -351,7 +364,8 @@ fixed end at the checkout) layered on top of shortest-path search.
 
 **Pipeline:**
 
-1. Resolve each list item to a target node (generic items resolve to a shelf area).
+1. Resolve each list item to a target node: products through their primary placement,
+   generic items through `CategoryPlacement`.
 2. Run Dijkstra to build an all-pairs distance matrix over only the nodes this list
    touches.
 3. Solve the TSP over that matrix:
@@ -360,7 +374,8 @@ fixed end at the checkout) layered on top of shortest-path search.
 4. Apply the **frozen/chilled-last soft constraint** — a penalty for visiting
    temperature-controlled stops early. Real shoppers care about this, and it
    differentiates the result from a pure distance optimiser.
-5. Expand the stop order back into a full polyline of coordinates.
+5. Expand the stop order back into one leg per stop (the path from the previous point),
+   plus a final leg from the last stop to the checkout.
 
 ### Serpentine baseline — build it, but TSP is the default
 
@@ -390,7 +405,7 @@ routes. Pure functions, no UI, testable from day one.
 Finnish is the hard part. `maito` must match `Kevytmaito 1l`, `maitoa`, and
 `luomumaito`. Compounding and inflection defeat naive substring matching.
 
-- **FlexSearch** index built at load time, configured with a custom tokenizer
+- **FlexSearch** index prebuilt at data-build time (§7), configured with a custom tokenizer
 - **Typo tolerance** and search-as-you-type
 - **Alias table** (`aliases.json`), hand-maintained, covering colloquialisms, brand
   shorthand, and common misspellings
@@ -416,7 +431,7 @@ baseline and as a fallback when an optimal route looks unintuitive in the store.
 
 ### Map view
 
-Inline SVG in three layers: shelf polygons, route polyline, markers.
+Inline SVG in three layers: shelf polygons, route legs, markers.
 
 - **Numbered pins** on target shelves, matching the numbered list below the map
 - **Three path states** — completed legs greyed, current leg highlighted and
@@ -450,17 +465,14 @@ degradation in the app and it should be shown as a quiet inline note, not an err
 
 ## 12. How the Team Works
 
-There are no fixed roles. Everyone is expected to touch every part of the system at
-least once, and specialisation is allowed to emerge from who picks up what rather than
-being assigned up front. On an eight-week project this is also the point: six people
-who each understand one sixth of the system cannot write the report, cannot cover for
-each other, and cannot review each other's pull requests meaningfully.
+There are no roles. Everyone is expected to touch every part of the system at least
+once. On an eight-week project this is also the point: six people who each understand
+one sixth of the system cannot write the report, cannot cover for each other, and
+cannot review each other's pull requests meaningfully.
 
-What replaces roles is **ownership per task, not per area**.
+Work is owned **per task, not per area**.
 
 ### Contract sprint — everyone, first 3 days
-
-Unchanged, and more important without roles than with them.
 
 - Agree the TypeScript types in `packages/core`
 - Write fixtures satisfying them: ~50 products, a 15-node toy graph, a hand-drawn
@@ -482,24 +494,20 @@ Every checkbox in §13 is a card. The rules are short enough to remember:
 - **Tedious bulk work is done in sessions, not by a person.** Tracing shelf polygons
   and placing nodes is several hundred repetitive actions; book two people for two
   hours in a room and split the store by section. See `data/graph/` in §5.
+- **Recurring work is a card like any other.** The Friday store run is claimed each
+  week by whoever takes the card. Deploys happen automatically on merge to `main`.
 
-### The one rotating job
-
-**Release captain, one week at a time, rotating through all six.** The captain runs
-the Friday store run, owns the deploy, triages the board on Monday, and calls the
-two 15-minute standups. It is a shift, not a title, and everyone takes it at least once.
-
-Nothing else is a standing job. CI, `packages/core` and the data build have no
-permanent owner; the person who touches them next owns them for that change.
+CI, `packages/core` and the data build have no permanent owner; the person who
+touches them next owns them for that change.
 
 ### Review
 
-- **One required review, from someone who did not write the change.** Branch
-  protection enforces this, not a person.
-- **Changes to shared types in `packages/core` need two reviewers**, because they
-  ripple into everyone's work in progress. This is the only exception.
-- **`.claude/rules.md` changes are reviewed by whoever is release captain that week**,
-  and only alongside a decision recorded in §17.
+- **One required review, from someone who did not write the change.** Enforced by
+  the "required approving reviews" setting in GitHub branch protection, not by a person.
+- There are **two exceptions**:
+  - **Changes to shared types in `packages/core` need two reviewers**, because they
+    ripple into everyone's work in progress.
+  - **`.claude/rules.md` changes are merged only alongside a decision recorded in §17.**
 
 ### Cadence
 
@@ -515,19 +523,6 @@ permanent owner; the person who touches them next owns them for that change.
 Organised by track rather than by person. Anything whose dependencies are met is
 claimable by anyone.
 
-Milestones are the gates that matter. A milestone is met when someone **other than the
-person who built it** demonstrates it on the deployed app — not when the boxes beneath
-it are ticked. Boxes describe work; milestones describe working software.
-
-### Milestones
-
-| #      | By         | Exit criterion — demonstrated, not declared                                                                                                                           |
-| ------ | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **M1** | end week 2 | Standing in K-Citymarket, on a phone, on the deployed URL: a 4-item list produces a route a person can actually follow. Ugly is fine. Stubs everywhere are fine.      |
-| **M2** | end week 5 | Same flow, with every stub replaced: real scraped catalogue, real traced map, TSP, FlexSearch. A 15-item list routes in under 500 ms on the oldest phone in the team. |
-| **M3** | end week 6 | Aeroplane mode, cold cache cleared, phone reconnected only long enough to install: search, list, route and map all work with the network off.                         |
-| **M4** | end week 8 | Two timed store runs completed, TSP-vs-serpentine benchmark recorded, report drafted from `docs/plans/`, demo rehearsed with a recorded fallback.                     |
-
 **The standing invariant:** the deployed app routes a real list in the real store every
 Friday from week two onward. If it does not, that is the only thing anyone works on
 Monday. This outranks every checkbox below.
@@ -536,17 +531,17 @@ Monday. This outranks every checkbox below.
 
 - [ ] Scope agreed in writing; course deliverables and deadline identified, plan worked backwards from it
 - [ ] Repo created **public**, pnpm workspaces configured, branch conventions set
-- [ ] `.env.example` committed with `VITE_DATA_SOURCE=mock | synthetic | build`
-- [ ] Pre-commit hooks (Husky + lint-staged)
+- [x] `.env.example` committed with `VITE_DATA_SOURCE=mock | synthetic | build`
+- [x] Pre-commit hooks (Husky + lint-staged)
 - [ ] CI skeleton: lint, typecheck, unit tests, build, branch protection, one required review
-- [ ] `.claude/` in place: `rules.md`, `agents/`, `skills/`, committed
-- [ ] `docs/` in place, this document at `docs/ARCHITECTURE.md`, `docs/plans/` created
+- [x] `.claude/` in place: `rules.md`, `agents/`, `skills/`, committed
+- [x] `docs/` in place, this document at `docs/ARCHITECTURE.md`, `docs/plans/` created
 - [ ] Contract sprint completed, `data/mock/` committed
 - [ ] `pnpm seed:synthetic` — deterministic 30k-product / 400-node fixture _(ready when: types are agreed)_
 - [ ] CI data-validation job: Zod schemas, duplicate EANs, referential integrity, graph connectivity, edge sanity _(ready when: `data/mock/` exists)_
 - [ ] CI core-tier budget gate, **failing** rather than warning _(ready when: `data:build` produces a manifest)_
 - [ ] Path filters, concurrency + cancel-in-progress, pnpm and Playwright caches
-- [ ] Netlify/Vercel deploy on merge to `main` — **needed for M1, not later**
+- [ ] Netlify deploy on merge to `main` — **needed for the first Friday store run, not later**
 
 ### Track B — Product data
 
@@ -559,7 +554,7 @@ Monday. This outranks every checkbox below.
 - [ ] `pnpm data:build` — versioned bundles, manifest, **core/display tier split**, search index prebuilt and exported
 - [ ] **Size measurement over the synthetic fixture**: gzipped size per chunk recorded, §14 budgets confirmed or adjusted once, before anyone builds against the bundle shape
 - [ ] Frozen `data/e2e-fixture/` committed
-- [ ] `CategoryPlacement` (`categoryId → nodeId`) hand-maintained — resolves generic entries, and the fallback when a product's shelf ID is unmatched
+- [ ] `CategoryPlacement` (`categoryId → nodeId`) hand-maintained, shipped in the core tier — the only way generic entries resolve, and the fallback when a product's shelf ID is unmatched
 - [ ] Finnish alias table (`aliases.json`), grown continuously — not a one-off task
 - [ ] Weekly scrape cron auto-opening a GitHub issue on placement changes
 
@@ -574,25 +569,25 @@ Monday. This outranks every checkbox below.
 - [ ] Nodes placed: aisle ends, junctions, entrance, checkouts, shelf access points
 - [ ] Extra attention to connectivity at department boundaries and the checkout area
 - [ ] Every shelf ID mapped to a node; unmatched IDs reported back to Track B
-- [ ] Verification walk, **step counts recorded per segment**; edge weights derived from pace counts
+- [ ] Verification walk, **step counts recorded per segment**; paced weights replace the geometric defaults
 - [ ] Shared SVG primitives extracted to `packages/map-render`
 
 ### Track D — Routing
 
 - [ ] Dijkstra; all-pairs matrix over only the nodes a list touches
-- [ ] Naive in-order routing, good enough for M1
+- [ ] Naive in-order routing, good enough for the first store run
 - [ ] Held-Karp (≤15 stops) and nearest-neighbour + 2-opt (>15)
 - [ ] Serpentine baseline — the report's comparison number
 - [ ] Open path: entrance start, checkout end
 - [ ] Frozen/chilled-last soft constraint
-- [ ] Generic entries collapsed to primary placement before routing
-- [ ] Route returned as ordered stops plus polyline
+- [ ] Generic entries resolved through `CategoryPlacement` before routing
+- [ ] Route returned as entrance, ordered stops each with its leg, and checkout
 - [ ] Unit tests on hand-verified routes over the mock graph
-- [ ] Property tests: starts at entrance, ends at checkout, every stop visited once, distance matches polyline, **Held-Karp ≤ 2-opt**, frozen stops in the final third
+- [ ] Property tests: starts at entrance, ends at checkout, every stop visited once, total distance matches the legs, **Held-Karp ≤ 2-opt**, frozen-last penalty never worse than with it off
 
 ### Track E — Search
 
-- [ ] `String.includes` over 50 mock products — good enough for M1, delete later
+- [ ] `String.includes` over 50 mock products — good enough for the first store run, delete later
 - [ ] FlexSearch with Finnish tokenizer; index **prebuilt at data-build time**
 - [ ] Typo tolerance, search-as-you-type
 - [ ] Alias table wired in
@@ -604,7 +599,7 @@ Monday. This outranks every checkbox below.
 
 - [ ] App shell, mobile layout, navigation
 - [ ] List builder: add, remove, reorder, check off; Zustand + `localStorage`
-- [ ] SVG map: shelf polygons, route polyline, numbered pins
+- [ ] SVG map: shelf polygons, route legs, numbered pins
 - [ ] Three path states; animated current leg
 - [ ] Auto-zoom to current leg, full-route toggle
 - [ ] Check-off advances the map
@@ -625,7 +620,7 @@ Monday. This outranks every checkbox below.
 
 ### Track H — Validation and report
 
-- [ ] Friday store run, every week from M1 — not a phase
+- [ ] Friday store run, every week from week two — a habit, not a one-off
 - [ ] Failure log: wrong routes, stale shelf data, misleading map areas
 - [ ] TSP vs serpentine across ~20 generated lists, distance delta recorded
 - [ ] Timed run: app-assisted vs unassisted, 15–20 items — the headline result
@@ -678,18 +673,18 @@ the architecture is built around is the feature that breaks first on a real devi
 The catalogue is therefore **not one artefact**. It is split by what routing actually
 needs, and the split is enforced in CI rather than left to discipline.
 
-| Tier        | Contents                                                                              | Caching                                           | Budget (gzipped)      |
-| ----------- | ------------------------------------------------------------------------------------- | ------------------------------------------------- | --------------------- |
-| **Core**    | walk graph, floorplan, categories, primary placements, aliases, prebuilt search index | precached by the service worker; required offline | **3 MB, CI-enforced** |
-| **Display** | full product records, secondary placements                                            | lazy, stale-while-revalidate, IndexedDB           | unbudgeted            |
-| **Editor**  | map-editor assets                                                                     | not cached at all                                 | n/a                   |
+| Tier        | Contents                                                                                                   | Caching                                           | Budget (gzipped)      |
+| ----------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | --------------------- |
+| **Core**    | walk graph, floorplan, categories, primary placements, category placements, aliases, prebuilt search index | precached by the service worker; required offline | **3 MB, CI-enforced** |
+| **Display** | full product records, secondary placements                                                                 | lazy, stale-while-revalidate, IndexedDB           | unbudgeted            |
+| **Editor**  | map-editor assets                                                                                          | not cached at all                                 | n/a                   |
 
 Core is everything needed to search a query, resolve a list and compute a route. If
 core is present, the app is fully functional offline. Display affects only how richly a
 result renders, so its absence degrades in one narrow, explainable way (§11).
 
-**Measure before optimising further.** `pnpm seed:synthetic` already produces a
-deterministic 30k-product fixture; that is the tool for this. In Phase 1, run
+**Measure before optimising further.** `pnpm seed:synthetic` will produce a
+deterministic 30k-product fixture; that is the tool for this. As soon as it exists, run
 `data:build` over it and record gzipped size per chunk. Every number above is a
 starting budget to be confirmed or adjusted against that measurement, once, early.
 
@@ -698,9 +693,10 @@ starting budget to be confirmed or adjusted against that measurement, once, earl
 - Only fields the app reads are normalised at all (§6). Price, images and descriptions
   are dropped at the scraper, not filtered at load.
 - Category ids are interned integers rather than strings.
-- Primary placements ship as a flat `EAN → nodeId` map, separate from the richer
-  `Placement` records.
-- The search index carries names and aliases only, with the EAN as its sole payload.
+- Primary placements ship as a flat `EAN → { nodeId, categoryId }` map, separate from
+  the richer `Placement` records. The `categoryId` is there so the frozen-last
+  constraint can be applied without the display tier.
+- The search index carries names and aliases only, with `{ ean, name }` as its payload.
 
 **Escape hatches, in the order they should be reached for**, if measurement shows core
 over budget:
@@ -771,7 +767,7 @@ laptop:
 Possibilities rather than commitments. None blocks anything.
 
 - **A11y assertion in CI** — `@axe-core/playwright` added to existing E2E flows, one
-  line per test. Turns the Phase 6 accessibility bullet from an intention into
+  line per test. Turns the Track F accessibility bullet from an intention into
   something enforced, and it is straightforward marks in the report.
 - **Local event log** — searches returning nothing, items failing to resolve, route
   computation times, written to `localStorage` and exportable as JSON. Worth it only
@@ -794,8 +790,8 @@ sitting in the same room), automated release tooling (tag two commits by hand).
 
 **The repository is public.** This gives unlimited GitHub Actions minutes on Linux
 runners, free Codecov, and doubles as a portfolio artefact. Nothing in the project
-is sensitive: the scraped data is public product information and there are no
-credentials.
+is sensitive: the scraped data is public product information, and the only
+credential is the Codecov upload token, kept in GitHub Secrets.
 
 Every tool below is free and open source. Total cost of this pipeline is zero.
 
@@ -806,7 +802,7 @@ that does not exist, and no amount of React testing catches that.
 ### On every PR
 
 - **Lint** — ESLint + Prettier `--check`, runs first, fails fast
-- **Typecheck** — `tsc --noEmit` across all workspaces
+- **Typecheck** — `pnpm typecheck`, which runs `tsc` in every workspace
 - **Unit tests + coverage** — Vitest; **85% threshold on `packages/core` only**, no
   threshold on React components (enforcing it there just produces assertion-free
   render tests written to hit a number)
@@ -817,10 +813,12 @@ that does not exist, and no amount of React testing catches that.
 
 - Zod schema validation over every core and display chunk, `graph.json` included
 - No duplicate EANs
-- Referential integrity: every `placement.nodeId` exists in the graph
-- Every product has at least one `isPrimary` placement
+- Referential integrity: every `placement.shelfId` matches a shelf in the graph, every
+  shelf's `accessNodeId` and every `CategoryPlacement.nodeId` exists as a node
+- Every product has exactly one `isPrimary` placement
 - **Graph connectivity**: all nodes reachable from the entrance, no orphans
-- Edge sanity: no zero or negative weights, all edges bidirectional
+- Edge sanity: no zero or negative weights, both endpoints exist, and no edge appears
+  twice in either direction (edges are stored once; the router walks them both ways)
 - Unmatched shelf ID count below an agreed threshold — fails loudly rather than
   degrading silently
 - **Core tier budget: gzipped total under 3 MB, failing the build if exceeded.** Not a
@@ -835,11 +833,15 @@ during the store walk.
 
 - Route starts at the entrance, ends at the checkout
 - Every requested stop visited exactly once
-- Reported distance matches the summed polyline length
-- **Solver cross-check** — on lists of ≤10 stops, assert Held-Karp distance ≤ 2-opt
+- Reported `totalDistance` equals the sum of every `legDistance`, and each
+  `legDistance` matches the length of its leg
+- **Solver cross-check** — on lists of ≤15 stops (the whole Held-Karp range), assert Held-Karp distance ≤ 2-opt
   distance. If the heuristic ever wins, one solver is broken. This also produces
   benchmark data for the report as a side effect.
-- Frozen and chilled stops appear in the final third of the route
+- **Frozen-last never makes things worse** — on lists of ≤15 stops (Held-Karp, exact),
+  the route's frozen/chilled penalty with the constraint on is ≤ the penalty of the same
+  list routed with it off. The constraint is soft, so it cannot promise a fixed position;
+  this is the property an exact solver does guarantee.
 
 ### E2E (Playwright, mobile viewport)
 
@@ -865,22 +867,23 @@ This converts "the store rearranged and we found out on stage" into a notificati
 
 ### On merge to `main`
 
-- Deploy `apps/web` to Netlify/Vercel production
-- `apps/map-editor` deployed separately or kept local-only
+- Deploy `apps/web` to Netlify production
+- `apps/map-editor` is local-only and never deployed
 
 ### Repository configuration
 
 - **Branch protection on `main`** — lint, typecheck, unit tests and build must pass
-  before merge. With six people, this is the mechanism that actually enforces the
-  review requirement rather than relying on everyone remembering to ask.
-- **One required review from someone who did not write the change**
-- **Two reviews on `packages/core` type changes**, since they ripple into everyone's
-  work in progress. This is the only exception, and it is a CI check rather than
-  CODEOWNERS, since there are no fixed owners
+  before merge.
+- **One required review from someone who did not write the change**, enforced by the
+  "required approving reviews" branch-protection setting. Passing checks do not
+  enforce reviews; this setting does.
+- There are **two exceptions** to the one-review rule:
+  - **Two reviews on `packages/core` type changes**, since they ripple into
+    everyone's work in progress. This is not automated: the header of `types.ts`
+    states it, and the first reviewer asks for a second before approving.
+  - **`.claude/rules.md` changes are merged only alongside a decision recorded in §17**
 - **Path filters** — map-editor changes skip E2E, data changes skip the frontend build,
   `docs/` changes run lint only
-- **`.claude/rules.md` changes are reviewed by that week's release captain**, and only
-  alongside a decision recorded in §17
 - **`concurrency` group with `cancel-in-progress`** — superseded pushes cancel runs
 - **Cache pnpm store and Playwright browsers**, or install time dominates runtime
 - **`ubuntu-latest` only** — macOS bills at 10×, and Linux is unlimited on public repos
@@ -909,16 +912,16 @@ architectural one, and it is handled in §14, not here.
 
 ## 16. Risks
 
-| Risk                                                  | Impact                                                                    | Mitigation                                                                                                                            |
-| ----------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| **Map editor slips**                                  | Blocks all mapping, blocks everything downstream                          | Ship an ugly version by week 2; polish later. Department-level graph by hand in week 1 so nothing waits on it                         |
-| **Mapping takes longer than estimated**               | Critical path                                                             | It is a full-time role; schematic fidelity, not measured                                                                              |
-| **Shelf IDs do not match reality**                    | Routes send users to the wrong place                                      | Verification walk; log unmatched IDs loudly                                                                                           |
-| **Finnish search underperforms**                      | Users cannot find items                                                   | Alias table; test with real shopping lists early                                                                                      |
-| **Integration reveals schema drift**                  | Late rework                                                               | Contract sprint up front; full integration week budgeted                                                                              |
-| **Store rearranges mid-project**                      | Data goes stale                                                           | Diffing script; re-scrape before the demo                                                                                             |
-| **No fixed roles means nobody owns the tedious work** | Bulk map tracing and the alias table stall; work is duplicated or dropped | One name per card while in flight, WIP limit of two, unclaimed cards raised at standup; rotating release captain owns board triage    |
-| **Core bundle outgrows its budget**                   | Offline install fails on real phones; the headline feature dies quietly   | Measure in Phase 1 before anyone builds against the bundle shape; CI gate that fails rather than warns; escape hatches ordered in §14 |
+| Risk                                            | Impact                                                                    | Mitigation                                                                                                                                            |
+| ----------------------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Map editor slips**                            | Blocks all mapping, blocks everything downstream                          | Ship an ugly version by week 2; polish later. Department-level graph by hand in week 1 so nothing waits on it                                         |
+| **Mapping takes longer than estimated**         | Critical path                                                             | Mapping needs booked sessions, not spare moments; schematic fidelity, not measured                                                                    |
+| **Shelf IDs do not match reality**              | Routes send users to the wrong place                                      | Verification walk; log unmatched IDs loudly                                                                                                           |
+| **Finnish search underperforms**                | Users cannot find items                                                   | Alias table; test with real shopping lists early                                                                                                      |
+| **Integration reveals schema drift**            | Late rework                                                               | Contract sprint up front; the weekly Friday store run exercises the integrated app every week                                                         |
+| **Store rearranges mid-project**                | Data goes stale                                                           | Diffing script; re-scrape before the demo                                                                                                             |
+| **Without roles, nobody owns the tedious work** | Bulk map tracing and the alias table stall; work is duplicated or dropped | One name per card while in flight, WIP limit of two, unclaimed cards raised at standup                                                                |
+| **Core bundle outgrows its budget**             | Offline install fails on real phones; the headline feature dies quietly   | Measure over the synthetic fixture before anyone builds against the bundle shape; CI gate that fails rather than warns; escape hatches ordered in §14 |
 
 **The two highest-risk items are the map editor and the in-store validation run.**
 Start the map early, and book the store visit well before the deadline so there is
@@ -928,29 +931,34 @@ time to fix what it reveals.
 
 ## 17. Decisions Made
 
-| Question                                   | Decision                                                                                  | Why                                                                                                                                                                     |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Generic vs SKU list entries                | **Both, generic by default**; generic collapses to primary placement before routing       | Matches how people write lists; avoids the generalised TSP in the MVP                                                                                                   |
-| Serpentine vs TSP                          | **TSP default**, serpentine implemented as benchmark and fallback toggle                  | TSP is the graded substance; the baseline turns a claim into a measured result                                                                                          |
-| Supabase for shared lists                  | **No backend.** Sharing via URL-encoded list state                                        | Accounts and sync add risk and weaken offline, and demonstrate nothing the course assesses                                                                              |
-| Floorplan fidelity                         | **Schematic throughout**, edge weights from pace counting                                 | Routes depend on topology and relative distance, not absolute geometry                                                                                                  |
-| Team structure                             | **No fixed roles.** Ownership per task, WIP limit of two, rotating weekly release captain | Six people who each understand one sixth of the system cannot review each other's work or write the report; specialisation is allowed to emerge rather than be assigned |
-| Repo visibility                            | **Public**                                                                                | Unlimited Actions minutes, free Codecov, portfolio value; nothing sensitive in the repo                                                                                 |
-| Catalogue delivery                         | **Tiered**: budgeted core precached, display lazy via IndexedDB                           | A single unbudgeted bundle makes offline, the headline feature, the first thing to break on a real phone                                                                |
-| Drop the offline requirement to solve size | **Rejected**                                                                              | Fails inside the building the app exists for, and turns a one-time download into a per-session one; it also removes the justification for the whole no-backend design   |
-| Search index construction                  | **Prebuilt at data-build time**, shipped as an asset                                      | Index build at startup, not query latency, is what misses the target at 30k products on an old phone                                                                    |
-| Server-side database for the catalogue     | **No** (client-side IndexedDB instead)                                                    | A backend reintroduces latency, deploy dependency and the loss of offline search, and demonstrates nothing the course assesses                                          |
-| Route shape                                | **Split into legs** on each `RouteStop`; no single polyline                               | Map needs per-leg greying, highlighting and auto-zoom                                                                                                                   |
-| Graph format                               | `{ version, nodes, edges, shelves }`, edges stored once, shelves as data                  | One format for editor, router and CI; shelves must be clickable and matchable                                                                                           |
-| Coordinates                                | **Metres**, origin top-left, y down                                                       | Edge weights can default to geometric distance; no unit conversions                                                                                                     |
-| List items                                 | `id` + `quantity` on every `ListItem`                                                     | Stable identity for reorder, check-off and React keys                                                                                                                   |
-| Rendering code                             | Pure geometry in `core`, React SVG in `map-render`                                        | `core` stays framework-free                                                                                                                                             |
-| Graph source                               | `data/graph/` per section; merged into `data/build/core/graph.json`                       | Parallel mapping without conflicts; hand-edited and generated files kept apart                                                                                          |
+| Question                                   | Decision                                                                                                                           | Why                                                                                                                                                                   |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Generic vs SKU list entries                | **Both, generic by default**; generic resolves through `CategoryPlacement` before routing                                          | Matches how people write lists; avoids the generalised TSP in the MVP                                                                                                 |
+| Serpentine vs TSP                          | **TSP default**, serpentine implemented as benchmark and fallback toggle                                                           | TSP is the graded substance; the baseline turns a claim into a measured result                                                                                        |
+| Supabase for shared lists                  | **No backend.** Sharing via URL-encoded list state                                                                                 | Accounts and sync add risk and weaken offline, and demonstrate nothing the course assesses                                                                            |
+| Floorplan fidelity                         | **Schematic throughout**; edge weights default to geometric distance, replaced by pace counts once walked                          | Routes depend on topology and relative distance, not absolute geometry                                                                                                |
+| Team structure                             | **No roles.** Ownership per task, WIP limit of two                                                                                 | Six people who each understand one sixth of the system cannot review each other's work or write the report                                                            |
+| Repo visibility                            | **Public**                                                                                                                         | Unlimited Actions minutes, free Codecov, portfolio value; nothing sensitive in the repo                                                                               |
+| Catalogue delivery                         | **Tiered**: budgeted core precached, display lazy via IndexedDB                                                                    | A single unbudgeted bundle makes offline, the headline feature, the first thing to break on a real phone                                                              |
+| Drop the offline requirement to solve size | **Rejected**                                                                                                                       | Fails inside the building the app exists for, and turns a one-time download into a per-session one; it also removes the justification for the whole no-backend design |
+| Search index construction                  | **Prebuilt at data-build time**, shipped as an asset                                                                               | Index build at startup, not query latency, is what misses the target at 30k products on an old phone                                                                  |
+| Server-side database for the catalogue     | **No** (client-side IndexedDB instead)                                                                                             | A backend reintroduces latency, deploy dependency and the loss of offline search, and demonstrates nothing the course assesses                                        |
+| Route shape                                | **Split into legs**: `start`, item `stops` each carrying the leg that reaches it, and `end` with the final leg; no single polyline | Map needs per-leg greying, highlighting and auto-zoom; pin numbers match the list because entrance and checkout are not stops                                         |
+| Graph format                               | `{ version, nodes, edges, shelves }`, edges stored once, shelves as data                                                           | One format for editor, router and CI; shelves must be clickable and matchable                                                                                         |
+| Coordinates                                | **Metres**, origin top-left, y down                                                                                                | Edge weights can default to geometric distance until paced; no unit conversions                                                                                       |
+| List items                                 | `id` + `quantity` on every `ListItem`                                                                                              | Stable identity for reorder, check-off and React keys                                                                                                                 |
+| Rendering code                             | Pure geometry in `core`, React SVG in `map-render`                                                                                 | `core` stays framework-free                                                                                                                                           |
+| Graph source                               | `data/graph/` per section; merged into `data/build/core/graph.json`                                                                | Parallel mapping without conflicts; hand-edited and generated files kept apart                                                                                        |
+| Placement → node                           | Placement stores `shelfId` only; node derived from `Shelf.accessNodeId` at build time                                              | One source of truth for where you stand to reach a shelf                                                                                                              |
+| Core placement data                        | `EAN → { nodeId, categoryId }` plus `CategoryPlacement`, both core tier                                                            | Core alone must resolve every list entry and apply the frozen-last constraint                                                                                         |
+| Search index payload                       | `{ ean, name }`                                                                                                                    | Offline results render a name without the display tier                                                                                                                |
+| Hosting                                    | **Netlify**                                                                                                                        | `netlify.toml` committed; static deploy with HTTPS                                                                                                                    |
+| Map editor deployment                      | **Local-only**                                                                                                                     | Used at a desk by one person; no reason to host it                                                                                                                    |
 
 ### Documented as future work, not as oversights
 
 - **Generalised TSP** — allowing generic entries to be satisfied at any of several
-  candidate nodes, rather than the primary placement only
+  candidate nodes, rather than the single `CategoryPlacement` node only
 - **Server-backed shared household lists** — only if the app sees real use after
   submission
 - **Measured floorplan** — if a later version needs accurate distance display

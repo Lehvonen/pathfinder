@@ -1,16 +1,17 @@
 # pathfinder
 
-| What you're writing                            | Where it goes          |
-| ---------------------------------------------- | ---------------------- |
-| Routing, TSP, shared types, shared SVG helpers | `packages/core/src/`   |
-| The shopping app                               | `apps/web/src/`        |
-| The map editor (internal tool)                 | `apps/map-editor/src/` |
-| Scraper (Python)                               | `scraper/`             |
-| Data build / validation scripts                | `scripts/`             |
-| Hand-made fixtures                             | `data/mock/`           |
-| Implementation plans, one per feature          | `docs/plans/`          |
+| What you're writing                       | Where it goes                    |
+| ----------------------------------------- | -------------------------------- |
+| Routing, TSP, shared types, pure geometry | `packages/core/src/`             |
+| React SVG components shared by both apps  | `packages/map-render/` (planned) |
+| The shopping app                          | `apps/web/src/`                  |
+| The map editor (internal tool)            | `apps/map-editor/src/`           |
+| Scraper (Python)                          | `scraper/`                       |
+| Data build / validation scripts           | `scripts/`                       |
+| Hand-made fixtures                        | `data/mock/`                     |
+| Implementation plans, one per feature     | `docs/plans/`                    |
 
-Rule of thumb: if both apps need it, or it's pure logic with no React, it goes in `packages/core`.
+Rule of thumb: pure logic with no React goes in `packages/core`. React code that both apps need goes in `packages/map-render`.
 
 ## Setup
 
