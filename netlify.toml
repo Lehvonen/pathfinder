@@ -1,0 +1,12 @@
+[build]
+  command = "pnpm --filter @pathfinder/web build"
+  publish = "apps/web/dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+  VITE_DATA_SOURCE = "mock"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
