@@ -9,3 +9,5 @@ __pycache__/
 playwright-report/
 test-results/
 .DS_Store
+
+.claude/worktrees/
