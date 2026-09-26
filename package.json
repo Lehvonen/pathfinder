@@ -12,7 +12,28 @@
     "prepare": "husky"
   },
   "lint-staged": {
-    "*.{ts,tsx,js}": ["eslint --fix", "prettier --write"],
-    "*.{json,md,yml,yaml,css}": ["prettier --write"]
+    "*.{ts,tsx,js}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml,css}": [
+      "prettier --write"
+    ]
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.11.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.12.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0",
+    "prettier": "^3.9.9",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.70.1"
+  },
+  "pnpm": {
+    "overrides": {
+      "typescript": "^6.0.0"
+    }
   }
 }
