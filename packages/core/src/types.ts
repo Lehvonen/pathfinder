@@ -33,6 +33,7 @@ export type CategoryPlacement = {
 };
 
 export type Category = {
+  // qwdqwdqwdqw
   id: number;
   name: string;
   temperature: 'ambient' | 'chilled' | 'frozen';
