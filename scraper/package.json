@@ -1,0 +1,14 @@
+{
+  "name": "@pathfinder/scraper",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "export:kupittaa": "bun run export-kupittaa.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.12",
+    "typescript": "^6.0.3"
+  }
+}
