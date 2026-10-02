@@ -57,7 +57,7 @@ in the browser.
 
 ```
 ┌────────────────────┐
-│  Scraper (`ruoka`) │   offline, run manually / scheduled
+│  Scraper (`ruoka`) │   offline, run manually
 │  K-Ruoka → JSON    │   see §7
 └─────────┬──────────┘
           │ products.json, placements.json
@@ -112,21 +112,21 @@ Revisit only after submission, if the app is actually being used.
 
 ## 4. Technology Stack
 
-| Layer              | Choice                                                     | Rationale                                                      |
-| ------------------ | ---------------------------------------------------------- | -------------------------------------------------------------- |
-| Frontend framework | React + TypeScript                                         | Team knows React; types catch graph/route errors early         |
-| Build tool         | Vite                                                       | Fast dev server, simple PWA plugin                             |
-| Styling            | Tailwind CSS                                               | Fast iteration, no CSS architecture debate                     |
-| Map rendering      | Hand-written inline SVG                                    | Own coordinate system, not geographic tiles                    |
-| Pan / zoom         | `d3-zoom` (only this module)                               | Pinch-zoom without pulling in all of D3                        |
-| Pathfinding        | Own Dijkstra (or `ngraph.path`)                            | Small, and it is the interesting part of the report            |
-| TSP                | Own implementation                                         | Held-Karp + 2-opt, written in-house                            |
-| Search             | FlexSearch, client-side, index prebuilt at data-build time | Works offline; moves index construction out of app startup     |
-| State              | Zustand                                                    | Lighter than Redux, avoids prop-drilling to the map            |
-| Persistence        | `localStorage` (lists) + IndexedDB (display records)       | Lists are tiny; full product records should not sit in JS heap |
-| PWA                | `vite-plugin-pwa`                                          | Manifest + service worker with minimal config                  |
-| Scraper            | `ruoka` MCP server (Bun + Playwright), outside the repo    | Already working, returns name, price and in-store location     |
-| Hosting            | Netlify, free tier                                         | Static deploy, HTTPS included (required for PWA)               |
+| Layer              | Choice                                                                                                               | Rationale                                                            |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Frontend framework | React + TypeScript                                                                                                   | Team knows React; types catch graph/route errors early               |
+| Build tool         | Vite                                                                                                                 | Fast dev server, simple PWA plugin                                   |
+| Styling            | Tailwind CSS                                                                                                         | Fast iteration, no CSS architecture debate                           |
+| Map rendering      | Hand-written inline SVG                                                                                              | Own coordinate system, not geographic tiles                          |
+| Pan / zoom         | `d3-zoom` (only this module)                                                                                         | Pinch-zoom without pulling in all of D3                              |
+| Pathfinding        | Own Dijkstra (or `ngraph.path`)                                                                                      | Small, and it is the interesting part of the report                  |
+| TSP                | Own implementation                                                                                                   | Held-Karp + 2-opt, written in-house                                  |
+| Search             | FlexSearch, client-side, hot and full indexes prebuilt at data-build time                                            | Works offline; moves index construction out of app startup           |
+| State              | Zustand                                                                                                              | Lighter than Redux, avoids prop-drilling to the map                  |
+| Persistence        | `localStorage` (lists) + IndexedDB (display records)                                                                 | Lists are tiny; full product records should not sit in JS heap       |
+| PWA                | `vite-plugin-pwa`                                                                                                    | Manifest + service worker with minimal config                        |
+| Scraper            | `scraper/export-kupittaa.ts` (Bun + Playwright), reusing the `p18a/mcp-k-ruoka` browser session from a sibling clone | Returns store-specific name, price, popularity and in-store location |
+| Hosting            | Netlify, free tier                                                                                                   | Static deploy, HTTPS included (required for PWA)                     |
 
 **Deliberately not used:**
 
@@ -157,14 +157,16 @@ Revisit only after submission, if the app is actually being used.
 ├── scripts/
 │   ├── validate-data.ts     Zod schemas + graph integrity checks
 │   ├── build-data.ts        scraper output → data/build/, stamps version
-│   └── seed-synthetic.ts    deterministic 30k-product / 400-node fixture (planned)
+│   └── seed-synthetic.ts    deterministic 50k-product / 400-node fixture (planned)
 │
 ├── .env.example             committed; VITE_DATA_SOURCE etc.
 │
-├── scraper/                 workspace package; the `ruoka` session it uses lives outside, see §7
+├── scraper/                 Bun + TypeScript workspace package; the `ruoka` session it uses lives outside, see §7
 │   ├── export-kupittaa.ts   whole-store export: products + in-store location → cache/
-│   ├── normalise.py         raw → schema
-│   ├── diff.py              compare scrapes, report moved/removed products
+│   ├── normalise.ts         raw → schema (planned)
+│   ├── diff.ts              compare scrapes, report moved/removed products (planned)
+│   ├── README.md            how to run the export
+│   ├── package.json, tsconfig.json
 │   └── cache/               raw responses, gitignored
 │
 ├── data/
@@ -181,8 +183,10 @@ Revisit only after submission, if the app is actually being used.
 │       │   ├── categories.json
 │       │   ├── placements-primary.json   EAN → { nodeId, categoryId }
 │       │   ├── category-placements.json  categoryId → nodeId, resolves generic entries
+│       │   ├── category-top.json         categoryId → [ean, …], top ~10 SKUs by popularity
 │       │   ├── aliases.json
-│       │   └── search-index.json         prebuilt FlexSearch export, payload { ean, name }
+│       │   ├── search-index-hot.json     prebuilt FlexSearch export, most popular products, payload { ean, name }
+│       │   └── search-index-full.json    prebuilt FlexSearch export, every searchable product, payload { ean, name }
 │       └── display/         lazy-loaded, unbudgeted
 │           ├── products.json             full records, keyed on EAN
 │           └── placements-secondary.json end-caps, promo spots
@@ -190,7 +194,7 @@ Revisit only after submission, if the app is actually being used.
 ├── packages/
 │   ├── core/                shared, framework-free, unit-tested
 │   │   └── src/
-│   │       ├── types.ts     the data contract — see docs/plans/contract.md
+│   │       ├── types.ts     the data contract — see docs/plans/contract.md (written in the contract sprint)
 │   │       ├── geometry.ts  pure geometry: lengths, bounds, fit-to-view
 │   │       ├── dijkstra.ts
 │   │       ├── tsp.ts
@@ -240,7 +244,8 @@ drafted from at the end instead of reconstructing eight weeks of decisions from 
 ### Core types
 
 The source of truth is `packages/core/src/types.ts`; the reasoning is in
-`docs/plans/contract.md`. The types are not repeated here. The key decisions are
+`docs/plans/contract.md`, to be written in the contract sprint (§12). The types are not
+repeated here. The key decisions are
 summarised in §17, but where the two differ, `types.ts` is authoritative.
 
 ---
@@ -290,20 +295,24 @@ summarised in §17, but where the two differ, `types.ts` is authoritative.
    The whole-store export is `scraper/export-kupittaa.ts`, which reuses the `ruoka`
    browser session: it lists every product by category, then fetches each one's location
    from `/kr-api/v4/products/<slug>?storeId=N119`, one request every 1.5 s, resumable,
-   stopping on any block. Output: `scraper/cache/kupittaa/products.ndjson`.
-2. `normalise.py` parses the cache into `products`, `placements`, `categories`,
-   deduplicating on EAN.
+   stopping on any block. Output in `scraper/cache/kupittaa/`: `queue.json` (every
+   product with name, price and popularity, from the listing), `products.ndjson` (one
+   record per product with its location) and `kupittaa.csv` (both merged, for people).
+2. `normalise.ts` parses `queue.json` and `products.ndjson` into `products`,
+   `placements`, `categories`, deduplicating on EAN.
 3. Shelf IDs are matched against the shelves in `graph.json`, and each placement's
    access node is taken from the matched shelf. **Unmatched shelf IDs are logged as
    errors, not silently dropped** — this list is the handoff between the data work
    and the map work.
-4. `diff.py` compares against the previous scrape and reports what moved, appeared,
+4. `diff.ts` compares against the previous scrape and reports what moved, appeared,
    or disappeared. Stores rearrange; this is how you notice.
 5. `build-data.ts` **builds two FlexSearch indexes and exports them**, so the app never
    constructs an index at startup: a **hot index** of the most popular products and a
    **full index** of every searchable product, both ordered by popularity (§10). They
    carry names and aliases only, with `{ ean, name }` as their payload, so a result can
-   be rendered without the display tier.
+   be rendered without the display tier. It also writes **`category-top.json`**
+   (`categoryId → [ean, …]`, the top ~10 products of each category by popularity), so
+   generic matches can list popular SKUs without popularity being shipped (§6).
 6. Output is **split into core and display tiers** (§14) and written to `data/build/`,
    committed, so the app build is reproducible. `manifest.json` records the gzipped
    size of each chunk.
@@ -312,53 +321,78 @@ summarised in §17, but where the two differ, `types.ts` is authoritative.
 rather than hitting K-Ruoka live per user request. The project is non-commercial and
 unaffiliated, so avoid K-Citymarket branding in the UI.
 
+**Scrape schedule:** one full scrape, plus one manual re-scrape before the demo,
+diffed against the committed bundle with `diff.ts` so moved, new and removed products
+are caught before going on stage. No scheduled scraping (§14b).
+
 ### The scraper: `ruoka` MCP server
 
-The working scraper is [`p18a/mcp-k-ruoka`](https://github.com/p18a/mcp-k-ruoka), an
-unofficial MCP server, with a local patch that adds in-store locations. It runs as a
-Claude Code MCP server called `ruoka`, so product data can be pulled from a chat
-("where is maito in Kupittaa?") as well as from scripts.
+[`p18a/mcp-k-ruoka`](https://github.com/p18a/mcp-k-ruoka) is an unofficial MCP server,
+used here with a local patch that adds in-store locations. It has two roles:
 
-**What it returns.** `search_products` returns, per product, at the selected store:
+- **Ad-hoc lookups.** Registered in Claude Code as the MCP server `ruoka`, so product
+  data can be pulled from a chat ("where is maito in Kupittaa?").
+- **The browser session.** Its Playwright session is what `scraper/export-kupittaa.ts`
+  loads at runtime. **The export script, not the MCP server, does the whole-store run**
+  (step 1 above); see `scraper/README.md` for its commands.
 
-| Field                      | Example (K-Citymarket Kupittaa)                          | Source                       |
-| -------------------------- | -------------------------------------------------------- | ---------------------------- |
-| `id`                       | `6410405082657` (EAN)                                    | search API                   |
-| `name`                     | `Pirkka suomalainen kevytmaito 1l`                       | search API                   |
-| `price`                    | `0.89`, plus `unitPrice` `0,89 €/l`                      | search API, store-specific   |
-| `brand`                    | `Pirkka`                                                 | search API                   |
-| `category`                 | `Maito, juusto, munat ja rasvat`                         | search API                   |
-| `location.department`      | `(MAITO) Maidot ja piimät - KORVAA ITSE`                 | product page, store-specific |
-| `location.departmentOrder` | `68`                                                     | product page, store-specific |
-| `location.shelf`           | `05` (K-Ruoka calls it `module`; the site shows "Hylly") | product page, store-specific |
-| `location.level`           | `1` (shelf level, "Taso")                                | product page, store-specific |
-| `location.zone`            | `KERÄILY`                                                | product page, store-specific |
+**What it returns.** Per product, at the selected store (`popularity` and
+`popularity_rank` come from the export script only):
+
+| Field                      | Example (K-Citymarket Kupittaa)                                                                                                                             | Source                              |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `id`                       | `6410405082657` (EAN)                                                                                                                                       | search API                          |
+| `name`                     | `Pirkka suomalainen kevytmaito 1l`                                                                                                                          | search API                          |
+| `price`                    | `0.89`, plus `unitPrice` `0,89 €/l`                                                                                                                         | search API, store-specific          |
+| `brand`                    | `Pirkka`                                                                                                                                                    | search API                          |
+| `category`                 | `Maito, juusto, munat ja rasvat`                                                                                                                            | search API                          |
+| `location.department`      | `(MAITO) Maidot ja piimät - KORVAA ITSE`                                                                                                                    | product page, store-specific        |
+| `location.departmentOrder` | `68`                                                                                                                                                        | product page, store-specific        |
+| `location.shelf`           | `05` (K-Ruoka calls it `module`; the site shows "Hylly")                                                                                                    | product page, store-specific        |
+| `location.level`           | `1` (shelf level, "Taso")                                                                                                                                   | product page, store-specific        |
+| `location.zone`            | `KERÄILY`                                                                                                                                                   | product page, store-specific        |
+| `popularity`               | `22234,8`; `0,0` means unranked                                                                                                                             | category listing                    |
+| `popularity_rank`          | `1` = most popular; unranked products all share the last rank (28024 in the first scrape; it changes with catalogue size, so test `popularity` = 0 instead) | computed by the export script's CSV |
 
 `get_stores` lists store IDs, optionally filtered by city.
 
-**Where the location comes from.** The search API has no shelf data. The product page,
-`/kauppa/tuote/<urlSlug>?kauppa=<store slug>`, embeds `product.location` for the
-selected store, and the patch reads it from there: one page load per result, five in
-parallel. Shelf numbers are per store (the same milk is shelf 31 in Iso Omena and 05 in
+**Where the location comes from.** The search API and the category listing have no
+shelf data; each product's detail data carries `product.location` for the selected
+store. The two tools read it differently:
+
+- **The export script** calls the JSON endpoint `/kr-api/v4/products/<slug>?storeId=N119`,
+  about 12 KB per product, one at a time with a 1.5 s pause.
+- **The MCP patch** reads it from the product page,
+  `/kauppa/tuote/<urlSlug>?kauppa=<store slug>`: one page load (~1.8 MB) per result,
+  five in parallel. Fine for a handful of ad-hoc lookups, too heavy for a whole store.
+
+Shelf numbers are per store (the same milk is shelf 31 in Iso Omena and 05 in
 Kupittaa), so the store must always be passed. `departmentOrder` looks like the store's
 own walking order, which is worth testing as a routing hint. Some departments are marked
 `isPublic: false`, so their names are internal labels rather than signage text.
 
-**Defaults.** The server is registered with `DEFAULT_CHAIN=k-ruoka` and
+**MCP defaults.** The server is registered with `DEFAULT_CHAIN=k-ruoka` and
 `DEFAULT_STORE_ID=N119` (K-Citymarket Turku Kupittaa), so a search needs only a query.
 `includeLocation` defaults to `true`; set it to `false` for faster searches without
 locations.
 
-**Why it lives outside the repo.** The upstream repository has no licence, so its code
-is not copied into this public repo, and it is a separate Bun project rather than a
-pnpm workspace package. Only its output belongs here, under `scraper/cache/`.
+**Why `mcp-k-ruoka` lives outside the repo.** The upstream repository has no licence, so
+its code is not copied into this public repo; the export script loads its session from
+a sibling clone at runtime. What lives here is our own code: `scraper/export-kupittaa.ts`
+and its output under `scraper/cache/` (gitignored).
 
-**Setup** (once per machine, Windows paths shown):
+**Setup for the export script** (once per machine, Windows paths shown). No patch and
+no MCP registration needed:
 
 ```
 npm i -g bun
 git clone https://github.com/p18a/mcp-k-ruoka.git C:/dev/mcp-k-ruoka
 cd C:/dev/mcp-k-ruoka && bun install && bunx playwright install chromium
+```
+
+**Optional, for ad-hoc lookups from Claude Code:**
+
+```
 # apply the location patch: src/browser/k-ruoka.ts, src/tools/search.ts, src/types.ts
 claude mcp add --scope user ruoka -e DEFAULT_CHAIN=k-ruoka -e DEFAULT_STORE_ID=N119 -- bun run C:/dev/mcp-k-ruoka/src/index.ts --stdio
 claude mcp get ruoka    # should show ✔ Connected
@@ -366,7 +400,7 @@ claude mcp get ruoka    # should show ✔ Connected
 
 Restart Claude Code after adding it. The patch currently exists only as uncommitted
 changes in one local clone; it needs a home (a fork, or a patch file under `scraper/`)
-before anyone else can set this up.
+before anyone else can use the MCP lookups. The export does not depend on it.
 
 **Caveats.**
 
@@ -374,8 +408,8 @@ before anyone else can set this up.
   break it. A broken location lookup returns `location: null` rather than failing the
   search, so check for nulls after every run.
 - **Bot-protection bypass.** It gets past Cloudflare with a Playwright stealth plugin.
-  Make sure that fits what Kesko has agreed to before any large or scheduled run, and
-  keep to the etiquette above either way.
+  Make sure that fits what Kesko has agreed to before any large run, and keep to the
+  etiquette above either way.
 
 ---
 
@@ -481,7 +515,7 @@ routes. Pure functions, no UI, testable from day one.
 Finnish is the hard part. `maito` must match `Kevytmaito 1l`, `maitoa`, and
 `luomumaito`. Compounding and inflection defeat naive substring matching.
 
-- **FlexSearch** index prebuilt at data-build time (§7), configured with a custom tokenizer
+- **FlexSearch** indexes (hot and full) prebuilt at data-build time (§7), configured with a custom tokenizer
 - **Typo tolerance** and search-as-you-type
 - **Alias table** (`aliases.json`), hand-maintained, covering colloquialisms, brand
   shorthand, and common misspellings
@@ -490,7 +524,8 @@ Finnish is the hard part. `maito` must match `Kevytmaito 1l`, `maitoa`, and
   are boosted on top of it. Unranked products sort after ranked ones.
 - **Generic resolution** — a query that matches a category rather than a product
   produces a generic list entry, with the most popular SKUs of that category listed
-  under it. A category match is a strong result.
+  under it, read from `category-top.json` in core (§7). A category match is a strong
+  result.
 
 Client-side search keeps everything working offline.
 
@@ -638,8 +673,8 @@ Monday. This outranks every checkbox below.
 - [ ] CI skeleton: lint, typecheck, unit tests, build, branch protection, one required review
 - [x] `.claude/` in place: `rules.md`, `agents/`, `skills/`, committed
 - [x] `docs/` in place, this document at `docs/ARCHITECTURE.md`, `docs/plans/` created
-- [ ] Contract sprint completed, `data/mock/` committed
-- [ ] `pnpm seed:synthetic` — deterministic 30k-product / 400-node fixture _(ready when: types are agreed)_
+- [ ] Contract sprint completed, `data/mock/` committed, `docs/plans/contract.md` written
+- [ ] `pnpm seed:synthetic` — deterministic 50k-product / 400-node fixture _(ready when: types are agreed)_
 - [ ] CI data-validation job: Zod schemas, duplicate EANs, referential integrity, graph connectivity, edge sanity _(ready when: `data/mock/` exists)_
 - [ ] CI core-tier budget gate, **failing** rather than warning _(ready when: `data:build` produces a manifest)_
 - [ ] Path filters, concurrency + cancel-in-progress, pnpm and Playwright caches
@@ -649,18 +684,17 @@ Monday. This outranks every checkbox below.
 
 - [ ] **Reconnaissance visit, week 1.** Check twenty scraped shelf IDs against physical shelf labels. The entire design assumes these match; find out before three weeks are spent on it
 - [x] `ruoka` scraper working: name, price and in-store location (department, shelf, level) per product at Kupittaa, see §7
-- [ ] `ruoka` location patch given a home (fork or patch file) so the whole team can set it up
-- [ ] Whole-store export (`scraper/export-kupittaa.ts`) written — first full run, output in `scraper/cache/kupittaa/`
-- [ ] `normalise.py` — raw → schema, EAN dedup, multi-placement handled, **no price, images or descriptions**
+- [ ] `ruoka` location patch given a home (fork or patch file) so the whole team can use MCP lookups — optional, the export does not need it
+- [x] Whole-store export (`scraper/export-kupittaa.ts`) written, output in `scraper/cache/kupittaa/` — first full run in progress
+- [ ] `normalise.ts` — raw → schema, EAN dedup, multi-placement handled, **no price, images or descriptions**
 - [ ] Full scrape reviewed by hand for junk, duplicates, missing shelves
 - [ ] Shelf IDs matched against `graph.json`; unmatched logged as errors, never dropped _(ready when: a real graph exists at any fidelity)_
-- [ ] `diff.py` — compare scrapes, report moved / new / removed
-- [ ] `pnpm data:build` — versioned bundles, manifest, **core/display tier split**, search index prebuilt and exported
-- [ ] **Size measurement over the synthetic fixture**: gzipped size per chunk recorded, §14 budgets confirmed or adjusted once, before anyone builds against the bundle shape
+- [ ] `diff.ts` — compare scrapes, report moved / new / removed
+- [ ] `pnpm data:build` — versioned bundles, manifest, **core/display tier split**, hot and full search indexes and `category-top.json` prebuilt and exported
+- [ ] **Size measurement on real data**: run `data:build` over the partial real scrape as soon as one exists, record gzipped size per chunk and extrapolate to the full catalogue; use the synthetic fixture for scale beyond that. §14 budgets confirmed or adjusted once, before anyone builds against the bundle shape. This measurement also sets the hot-index N (still open in §17)
 - [ ] Frozen `data/e2e-fixture/` committed
 - [ ] `CategoryPlacement` (`categoryId → nodeId`) hand-maintained, shipped in the core tier — the only way generic entries resolve, and the fallback when a product's shelf ID is unmatched
 - [ ] Finnish alias table (`aliases.json`), grown continuously — not a one-off task
-- [ ] Weekly scrape cron auto-opening a GitHub issue on placement changes
 
 ### Track C — The map
 
@@ -692,7 +726,7 @@ Monday. This outranks every checkbox below.
 ### Track E — Search
 
 - [ ] `String.includes` over 50 mock products — good enough for the first store run, delete later
-- [ ] FlexSearch with Finnish tokenizer; index **prebuilt at data-build time**
+- [ ] FlexSearch with Finnish tokenizer; hot and full indexes **prebuilt at data-build time**
 - [ ] Typo tolerance, search-as-you-type
 - [ ] Alias table wired in
 - [ ] Ranking by popularity, boosted for primary placements and aliases; unranked last
@@ -773,32 +807,33 @@ rather than regenerates.
 
 **This is the one place where two stated design properties can contradict each other.**
 Offline operation is a headline requirement (§2, §3), and offline means precaching the
-catalogue onto a phone. A raw 30k-product scrape can run to tens of megabytes, and
+catalogue onto a phone. A raw 50k-product scrape can run to tens of megabytes, and
 precaching that over cellular is not something users complete. Unbudgeted, the feature
 the architecture is built around is the feature that breaks first on a real device.
 
 The catalogue is therefore **not one artefact**. It is split by what routing actually
 needs, and the split is enforced in CI rather than left to discipline.
 
-| Tier        | Contents                                                                                                                  | Caching                                           | Budget (gzipped)      |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | --------------------- |
-| **Core**    | walk graph, floorplan, categories, primary placements, category placements, aliases, prebuilt hot and full search indexes | precached by the service worker; required offline | **3 MB, CI-enforced** |
-| **Display** | full product records, secondary placements                                                                                | lazy, stale-while-revalidate, IndexedDB           | unbudgeted            |
-| **Editor**  | map-editor assets                                                                                                         | not cached at all                                 | n/a                   |
+| Tier        | Contents                                                                                                                                     | Caching                                           | Budget (gzipped)      |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | --------------------- |
+| **Core**    | walk graph, floorplan, categories, primary placements, category placements, category top SKUs, aliases, prebuilt hot and full search indexes | precached by the service worker; required offline | **3 MB, CI-enforced** |
+| **Display** | full product records, secondary placements                                                                                                   | lazy, stale-while-revalidate, IndexedDB           | unbudgeted            |
+| **Editor**  | map-editor assets                                                                                                                            | not cached at all                                 | n/a                   |
 
 Core is everything needed to search a query, resolve a list and compute a route. If
 core is present, the app is fully functional offline. Display affects only how richly a
 result renders, so its absence degrades in one narrow, explainable way (§11).
 
 **Measure before optimising further.** `pnpm seed:synthetic` will produce a
-deterministic 30k-product fixture; that is the tool for this. As soon as it exists, run
+deterministic 50k-product fixture; that is the tool for this. As soon as it exists, run
 `data:build` over it and record gzipped size per chunk. Every number above is a
 starting budget to be confirmed or adjusted against that measurement, once, early.
 
 **How core stays inside its budget:**
 
 - Only fields the app reads are normalised at all (§6). Price, images and descriptions
-  are dropped at the scraper, not filtered at load.
+  are dropped during normalisation, not filtered at load. (The scraper
+  keeps price in its own cache and CSV; it never reaches `data/build/`.)
 - Category ids are interned integers rather than strings.
 - Primary placements ship as a flat `EAN → { nodeId, categoryId }` map, separate from
   the richer `Placement` records. The `categoryId` is there so the frozen-last
@@ -816,7 +851,9 @@ over budget:
    after the first load and cached for later visits and offline use. The hot index stays
    precached, so common searches remain instant and offline. Raising the budget
    instead is a legitimate choice, since speed matters more than size (§10), but it is a
-   §17 decision, not a quiet CI change.
+   §17 decision, not a quiet CI change. Taking this hatch also requires a "full
+   catalogue not downloaded yet" state among §11's loading, empty and error states, and
+   a matching change to the E2E offline test, since §10 currently promises no such state.
 
 Shrink the index before shrinking the data, and shrink the data before weakening
 offline. **Do not resolve this by dropping the offline requirement**: a network
@@ -842,7 +879,7 @@ scrape breaks the test suite, and once CI is red by default people stop reading 
 
 ### Synthetic seed generator
 
-`pnpm seed:synthetic` produces a deterministic 30k-product catalogue on a ~400-node
+`pnpm seed:synthetic` produces a deterministic 50k-product catalogue on a ~400-node
 graph from a fixed seed. Needed for performance testing and for property tests over
 the routing engine at realistic scale. Roughly fifty lines.
 
@@ -895,7 +932,9 @@ Possibilities rather than commitments. None blocks anything.
 Recorded so they are not re-proposed mid-project: Storybook (a plain `/dev` route
 covers it), Turborepo (builds are seconds), visual regression testing (flaky across
 runners), Lighthouse CI (run it manually once for the report), Sentry (six users, all
-sitting in the same room), automated release tooling (tag two commits by hand).
+sitting in the same room), automated release tooling (tag two commits by hand), a
+weekly scheduled scrape (one full scrape plus one re-scrape before the demo is enough
+for a non-commercial school project).
 
 ---
 
@@ -940,6 +979,7 @@ that does not exist, and no amount of React testing catches that.
 - No display-tier field appears in a core-tier chunk (schema separation holds)
 - Every EAN in the hot index is also in the full index, and every searchable product is
   in the full index
+- Every EAN in `category-top.json` exists in the full index
 
 The connectivity check alone catches most map-editor mistakes in minutes, instead of
 during the store walk.
@@ -970,15 +1010,6 @@ during the store walk.
 
 Keep E2E to these few flows. Large suites on a student timeline become a tax nobody
 pays.
-
-### Scheduled (weekly cron)
-
-- Run the scraper, diff against the committed bundle
-- **Auto-open a GitHub issue** if placements moved, products disappeared, or new shelf
-  IDs appeared
-- Re-run manually before the demo regardless of schedule
-
-This converts "the store rearranged and we found out on stage" into a notification.
 
 ### On merge to `main`
 
@@ -1027,17 +1058,17 @@ architectural one, and it is handled in §14, not here.
 
 ## 16. Risks
 
-| Risk                                            | Impact                                                                               | Mitigation                                                                                                                                            |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Map editor slips**                            | Blocks all mapping, blocks everything downstream                                     | Ship an ugly version by week 2; polish later. Department-level graph by hand in week 1 so nothing waits on it                                         |
-| **Mapping takes longer than estimated**         | Critical path                                                                        | Mapping needs booked sessions, not spare moments; schematic fidelity, not measured                                                                    |
-| **Shelf IDs do not match reality**              | Routes send users to the wrong place                                                 | Verification walk; log unmatched IDs loudly                                                                                                           |
-| **Finnish search underperforms**                | Users cannot find items                                                              | Alias table; test with real shopping lists early                                                                                                      |
-| **Integration reveals schema drift**            | Late rework                                                                          | Contract sprint up front; the weekly Friday store run exercises the integrated app every week                                                         |
-| **Store rearranges mid-project**                | Data goes stale                                                                      | Diffing script; re-scrape before the demo                                                                                                             |
-| **Without roles, nobody owns the tedious work** | Bulk map tracing and the alias table stall; work is duplicated or dropped            | One name per card while in flight, WIP limit of two, unclaimed cards raised at standup                                                                |
-| **Core bundle outgrows its budget**             | Offline install fails on real phones; the headline feature dies quietly              | Measure over the synthetic fixture before anyone builds against the bundle shape; CI gate that fails rather than warns; escape hatches ordered in §14 |
-| **Popularity misranks in-store habits**         | Kesko's score likely reflects online orders; bulky items rank high, impulse buys low | Full index always searchable; aliases and boosts; ranking drift noted as a limitation, re-scraped once before the demo                                |
+| Risk                                            | Impact                                                                               | Mitigation                                                                                                                                                                                   |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Map editor slips**                            | Blocks all mapping, blocks everything downstream                                     | Ship an ugly version by week 2; polish later. Department-level graph by hand in week 1 so nothing waits on it                                                                                |
+| **Mapping takes longer than estimated**         | Critical path                                                                        | Mapping needs booked sessions, not spare moments; schematic fidelity, not measured                                                                                                           |
+| **Shelf IDs do not match reality**              | Routes send users to the wrong place                                                 | Verification walk; log unmatched IDs loudly                                                                                                                                                  |
+| **Finnish search underperforms**                | Users cannot find items                                                              | Alias table; test with real shopping lists early                                                                                                                                             |
+| **Integration reveals schema drift**            | Late rework                                                                          | Contract sprint up front; the weekly Friday store run exercises the integrated app every week                                                                                                |
+| **Store rearranges mid-project**                | Data goes stale                                                                      | Diffing script; re-scrape before the demo                                                                                                                                                    |
+| **Without roles, nobody owns the tedious work** | Bulk map tracing and the alias table stall; work is duplicated or dropped            | One name per card while in flight, WIP limit of two, unclaimed cards raised at standup                                                                                                       |
+| **Core bundle outgrows its budget**             | Offline install fails on real phones; the headline feature dies quietly              | Measure on the partial real scrape, then the synthetic fixture for scale, before anyone builds against the bundle shape; CI gate that fails rather than warns; escape hatches ordered in §14 |
+| **Popularity misranks in-store habits**         | Kesko's score likely reflects online orders; bulky items rank high, impulse buys low | Full index always searchable; aliases and boosts; ranking drift noted as a limitation, re-scraped once before the demo                                                                       |
 
 **The two highest-risk items are the map editor and the in-store validation run.**
 Start the map early, and book the store visit well before the deadline so there is
@@ -1057,7 +1088,7 @@ time to fix what it reveals.
 | Repo visibility                            | **Public**                                                                                                                                                            | Unlimited Actions minutes, free Codecov, portfolio value; nothing sensitive in the repo                                                                               |
 | Catalogue delivery                         | **Tiered**: budgeted core precached, display lazy via IndexedDB                                                                                                       | A single unbudgeted bundle makes offline, the headline feature, the first thing to break on a real phone                                                              |
 | Drop the offline requirement to solve size | **Rejected**                                                                                                                                                          | Fails inside the building the app exists for, and turns a one-time download into a per-session one; it also removes the justification for the whole no-backend design |
-| Search index construction                  | **Prebuilt at data-build time**, shipped as an asset                                                                                                                  | Index build at startup, not query latency, is what misses the target at 30k products on an old phone                                                                  |
+| Search index construction                  | **Prebuilt at data-build time**, shipped as an asset                                                                                                                  | Index build at startup, not query latency, is what misses the target at 50k products on an old phone                                                                  |
 | Server-side database for the catalogue     | **No** (client-side IndexedDB instead)                                                                                                                                | A backend reintroduces latency, deploy dependency and the loss of offline search, and demonstrates nothing the course assesses                                        |
 | Route shape                                | **Split into legs**: `start`, item `stops` each carrying the leg that reaches it, and `end` with the final leg; no single polyline                                    | Map needs per-leg greying, highlighting and auto-zoom; pin numbers match the list because entrance and checkout are not stops                                         |
 | Graph format                               | `{ version, nodes, edges, shelves }`, edges stored once, shelves as data                                                                                              | One format for editor, router and CI; shelves must be clickable and matchable                                                                                         |
@@ -1069,6 +1100,7 @@ time to fix what it reveals.
 | Core placement data                        | `EAN → { nodeId, categoryId }` plus `CategoryPlacement`, both core tier                                                                                               | Core alone must resolve every list entry and apply the frozen-last constraint                                                                                         |
 | Search index payload                       | `{ ean, name }`                                                                                                                                                       | Offline results render a name without the display tier                                                                                                                |
 | Search ranking and loading                 | **Ranked by Kesko popularity.** A **hot index** of the most popular products loads first; the **full index** loads in a Web Worker straight after. **Both precached** | Speed over size: nobody should wait to find milk. Popularity decides load order, not what is offline, so full offline search is kept                                  |
+| Category top SKUs                          | Prebuilt `category-top.json` in core                                                                                                                                  | Lets generic matches show popular SKUs without shipping popularity on `Product`; types.ts unchanged                                                                   |
 | Search speed targets                       | Keystroke → results under **50 ms**; app open → first search under **500 ms**; milk first within 1–3 keystrokes                                                       | Replaces the earlier 100 ms / 2 s targets; the hot index exists to hit them                                                                                           |
 | Hosting                                    | **Netlify**                                                                                                                                                           | `netlify.toml` committed; static deploy with HTTPS                                                                                                                    |
 | Map editor deployment                      | **Local-only**                                                                                                                                                        | Used at a desk by one person; no reason to host it                                                                                                                    |
