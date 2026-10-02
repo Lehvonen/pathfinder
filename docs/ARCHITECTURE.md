@@ -252,6 +252,11 @@ summarised in §17, but where the two differ, `types.ts` is authoritative.
   copy are discarded during normalisation. Prices and stock levels are out of scope
   (§2), and the catalogue is precached onto phones, so every unused field is dead
   weight shipped to every user. See the data budget in §14.
+- **Popularity is a build-time signal, not a shipped field.** Kesko's `popularity`
+  score orders the search indexes and decides which products go in the hot index
+  (§10). It is not stored on `Product`, so `types.ts` does not change. A score of 0
+  means _unranked_ (about 15k of ~43k products at Kupittaa), not a tie, and is
+  normalised to `null`.
 - **Placements are one-to-many, with exactly one primary.** A product can appear in
   its home aisle, on a promotional end-cap, and in a cooler near the checkout. Exactly
   one of those is `isPrimary`; that is the one routing uses.
@@ -294,9 +299,11 @@ summarised in §17, but where the two differ, `types.ts` is authoritative.
    and the map work.
 4. `diff.py` compares against the previous scrape and reports what moved, appeared,
    or disappeared. Stores rearrange; this is how you notice.
-5. `build-data.ts` **builds the FlexSearch index and exports it**, so the app never
-   constructs an index at startup. The index carries names and aliases only, with
-   `{ ean, name }` as its payload, so a result can be rendered without the display tier.
+5. `build-data.ts` **builds two FlexSearch indexes and exports them**, so the app never
+   constructs an index at startup: a **hot index** of the most popular products and a
+   **full index** of every searchable product, both ordered by popularity (§10). They
+   carry names and aliases only, with `{ ean, name }` as their payload, so a result can
+   be rendered without the display tier.
 6. Output is **split into core and display tiers** (§14) and written to `data/build/`,
    committed, so the app build is reproducible. `manifest.json` records the gzipped
    size of each chunk.
@@ -478,11 +485,35 @@ Finnish is the hard part. `maito` must match `Kevytmaito 1l`, `maitoa`, and
 - **Typo tolerance** and search-as-you-type
 - **Alias table** (`aliases.json`), hand-maintained, covering colloquialisms, brand
   shorthand, and common misspellings
-- **Ranking** biased toward primary placements and common products
+- **Ranking by popularity.** Kesko's popularity score (§6) is the main ranking signal,
+  so `ma` already puts the most-bought milk first. Primary placements and alias matches
+  are boosted on top of it. Unranked products sort after ranked ones.
 - **Generic resolution** — a query that matches a category rather than a product
-  produces a generic list entry
+  produces a generic list entry, with the most popular SKUs of that category listed
+  under it. A category match is a strong result.
 
 Client-side search keeps everything working offline.
+
+### Speed first
+
+**The goal is that nobody waits to find milk.** Size matters less than latency, so the
+design spends bytes to save milliseconds:
+
+- **Two indexes, both precached** (§14). The **hot index** holds the most popular
+  products: at Kupittaa the top 5,000 cover about 81% of total popularity, in roughly a
+  tenth of the full index's size. It is loaded first and is searchable almost at once.
+  The **full index** is loaded straight after in a **Web Worker**, in the same session,
+  and takes over as soon as it is ready. Both are offline from the first visit, so there
+  is no "not downloaded yet" state.
+- **Popularity decides load order, not what is cached.** Every product stays searchable
+  offline; the hot index only makes the common case instant while the full index loads.
+- **No debounce, small renders.** Search runs on every keystroke and renders the top
+  ~20 results only.
+- **Optional prefix table.** If measurement shows the first keystrokes are slow, a
+  build-time table of the best results for 1–3 letter prefixes answers them without an
+  index lookup.
+- The hot-index size is set by measurement against the targets in §14, not fixed in
+  advance.
 
 ---
 
@@ -518,8 +549,10 @@ Stop count, estimated distance, estimated time.
 
 ### Offline
 
-Manifest, service worker, precached app shell and **core tier only** (§14). Chunks are
-content-hashed individually so one can be updated without redownloading everything.
+Manifest, service worker, precached app shell and **core tier only** (§14), which
+includes both search indexes. Chunks are content-hashed individually so one can be
+updated without redownloading everything. On start the hot index is loaded first and
+the full index in a worker straight after (§10).
 
 The display tier is fetched lazily, stale-while-revalidate, and cached in IndexedDB
 keyed on EAN. Search, list building, routing and the map therefore work with no
@@ -662,7 +695,10 @@ Monday. This outranks every checkbox below.
 - [ ] FlexSearch with Finnish tokenizer; index **prebuilt at data-build time**
 - [ ] Typo tolerance, search-as-you-type
 - [ ] Alias table wired in
-- [ ] Ranking biased toward primary placements and common products
+- [ ] Ranking by popularity, boosted for primary placements and aliases; unranked last
+- [ ] Hot index (most popular products) loaded first, full index in a Web Worker straight after; both precached
+- [ ] **Measure on the oldest team phone**: hot-index size, cold start to first search, keystroke latency (§14 targets); prefix table only if needed
+- [ ] Decide whether products with no Kupittaa location are searchable _(ready when: the full scrape has finished)_
 - [ ] Generic resolution: category match → generic list entry
 - [ ] Single-item lookup → map pin
 
@@ -744,11 +780,11 @@ the architecture is built around is the feature that breaks first on a real devi
 The catalogue is therefore **not one artefact**. It is split by what routing actually
 needs, and the split is enforced in CI rather than left to discipline.
 
-| Tier        | Contents                                                                                                   | Caching                                           | Budget (gzipped)      |
-| ----------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | --------------------- |
-| **Core**    | walk graph, floorplan, categories, primary placements, category placements, aliases, prebuilt search index | precached by the service worker; required offline | **3 MB, CI-enforced** |
-| **Display** | full product records, secondary placements                                                                 | lazy, stale-while-revalidate, IndexedDB           | unbudgeted            |
-| **Editor**  | map-editor assets                                                                                          | not cached at all                                 | n/a                   |
+| Tier        | Contents                                                                                                                  | Caching                                           | Budget (gzipped)      |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | --------------------- |
+| **Core**    | walk graph, floorplan, categories, primary placements, category placements, aliases, prebuilt hot and full search indexes | precached by the service worker; required offline | **3 MB, CI-enforced** |
+| **Display** | full product records, secondary placements                                                                                | lazy, stale-while-revalidate, IndexedDB           | unbudgeted            |
+| **Editor**  | map-editor assets                                                                                                         | not cached at all                                 | n/a                   |
 
 Core is everything needed to search a query, resolve a list and compute a route. If
 core is present, the app is fully functional offline. Display affects only how richly a
@@ -767,15 +803,20 @@ starting budget to be confirmed or adjusted against that measurement, once, earl
 - Primary placements ship as a flat `EAN → { nodeId, categoryId }` map, separate from
   the richer `Placement` records. The `categoryId` is there so the frozen-last
   constraint can be applied without the display tier.
-- The search index carries names and aliases only, with `{ ean, name }` as its payload.
+- The search indexes carry names and aliases only, with `{ ean, name }` as their
+  payload. The hot index is a subset of the full one, so it adds little.
 
 **Escape hatches, in the order they should be reached for**, if measurement shows core
 over budget:
 
 1. Prune stopwords and shorten the tokenizer's n-gram range in the index.
 2. Index at category granularity and linear-scan within the matched category. A few
-   hundred rows is well inside the 100 ms search target.
-3. Only then consider restricting SKU-level search to a common-product subset.
+   hundred rows is well inside the 50 ms search target.
+3. Only then move the **full** index out of the precache: fetched in the background
+   after the first load and cached for later visits and offline use. The hot index stays
+   precached, so common searches remain instant and offline. Raising the budget
+   instead is a legitimate choice, since speed matters more than size (§10), but it is a
+   §17 decision, not a quiet CI change.
 
 Shrink the index before shrinking the data, and shrink the data before weakening
 offline. **Do not resolve this by dropping the offline requirement**: a network
@@ -823,12 +864,13 @@ before the first bulk mapping session, not after.
 Set numbers rather than assuming, and test on the **oldest phone in the team**, not a
 laptop:
 
-- Search results under 100 ms
+- **Keystroke to results visible under 50 ms**
 - Route computation under 500 ms for a 20-item list
 - Map interaction at 60 fps while panning
-- **Cold start to first usable search under 2 s**, warm cache, on that phone. This is
-  the target the tiering and the prebuilt index exist to hit; 100 ms query latency is
-  meaningless if the index takes eight seconds to become available.
+- **App open to first usable search (hot index) under 500 ms**, warm cache, on that
+  phone. This is the target the hot index and the prebuilt indexes exist to hit; fast
+  queries are meaningless if the index takes seconds to become available.
+- **"maito" shows a milk as the first result within 1–3 keystrokes**
 - **Core tier under 3 MB gzipped**, enforced in CI rather than checked by hand
 
 ---
@@ -896,6 +938,8 @@ that does not exist, and no amount of React testing catches that.
   warning. A warning gets merged. This is the check that keeps the offline requirement
   and the catalogue size from quietly diverging over six contributors and eight weeks.
 - No display-tier field appears in a core-tier chunk (schema separation holds)
+- Every EAN in the hot index is also in the full index, and every searchable product is
+  in the full index
 
 The connectivity check alone catches most map-editor mistakes in minutes, instead of
 during the store walk.
@@ -920,8 +964,8 @@ during the store walk.
   correct pin count → check off item → current leg advances
 - **Single-item lookup** — search → result → map pin
 - **Offline** — load app, set browser context offline, verify search and routing still
-  work. Offline is a headline design decision, so it should be verified rather than
-  assumed.
+  work, including a product that is only in the full index, not the hot one. Offline is
+  a headline design decision, so it should be verified rather than assumed.
 - **Share link** — encode list to URL, load in a fresh context, verify restoration
 
 Keep E2E to these few flows. Large suites on a student timeline become a tax nobody
@@ -983,16 +1027,17 @@ architectural one, and it is handled in §14, not here.
 
 ## 16. Risks
 
-| Risk                                            | Impact                                                                    | Mitigation                                                                                                                                            |
-| ----------------------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Map editor slips**                            | Blocks all mapping, blocks everything downstream                          | Ship an ugly version by week 2; polish later. Department-level graph by hand in week 1 so nothing waits on it                                         |
-| **Mapping takes longer than estimated**         | Critical path                                                             | Mapping needs booked sessions, not spare moments; schematic fidelity, not measured                                                                    |
-| **Shelf IDs do not match reality**              | Routes send users to the wrong place                                      | Verification walk; log unmatched IDs loudly                                                                                                           |
-| **Finnish search underperforms**                | Users cannot find items                                                   | Alias table; test with real shopping lists early                                                                                                      |
-| **Integration reveals schema drift**            | Late rework                                                               | Contract sprint up front; the weekly Friday store run exercises the integrated app every week                                                         |
-| **Store rearranges mid-project**                | Data goes stale                                                           | Diffing script; re-scrape before the demo                                                                                                             |
-| **Without roles, nobody owns the tedious work** | Bulk map tracing and the alias table stall; work is duplicated or dropped | One name per card while in flight, WIP limit of two, unclaimed cards raised at standup                                                                |
-| **Core bundle outgrows its budget**             | Offline install fails on real phones; the headline feature dies quietly   | Measure over the synthetic fixture before anyone builds against the bundle shape; CI gate that fails rather than warns; escape hatches ordered in §14 |
+| Risk                                            | Impact                                                                               | Mitigation                                                                                                                                            |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Map editor slips**                            | Blocks all mapping, blocks everything downstream                                     | Ship an ugly version by week 2; polish later. Department-level graph by hand in week 1 so nothing waits on it                                         |
+| **Mapping takes longer than estimated**         | Critical path                                                                        | Mapping needs booked sessions, not spare moments; schematic fidelity, not measured                                                                    |
+| **Shelf IDs do not match reality**              | Routes send users to the wrong place                                                 | Verification walk; log unmatched IDs loudly                                                                                                           |
+| **Finnish search underperforms**                | Users cannot find items                                                              | Alias table; test with real shopping lists early                                                                                                      |
+| **Integration reveals schema drift**            | Late rework                                                                          | Contract sprint up front; the weekly Friday store run exercises the integrated app every week                                                         |
+| **Store rearranges mid-project**                | Data goes stale                                                                      | Diffing script; re-scrape before the demo                                                                                                             |
+| **Without roles, nobody owns the tedious work** | Bulk map tracing and the alias table stall; work is duplicated or dropped            | One name per card while in flight, WIP limit of two, unclaimed cards raised at standup                                                                |
+| **Core bundle outgrows its budget**             | Offline install fails on real phones; the headline feature dies quietly              | Measure over the synthetic fixture before anyone builds against the bundle shape; CI gate that fails rather than warns; escape hatches ordered in §14 |
+| **Popularity misranks in-store habits**         | Kesko's score likely reflects online orders; bulky items rank high, impulse buys low | Full index always searchable; aliases and boosts; ranking drift noted as a limitation, re-scraped once before the demo                                |
 
 **The two highest-risk items are the map editor and the in-store validation run.**
 Start the map early, and book the store visit well before the deadline so there is
@@ -1002,30 +1047,32 @@ time to fix what it reveals.
 
 ## 17. Decisions Made
 
-| Question                                   | Decision                                                                                                                           | Why                                                                                                                                                                   |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Generic vs SKU list entries                | **Both, generic by default**; generic resolves through `CategoryPlacement` before routing                                          | Matches how people write lists; avoids the generalised TSP in the MVP                                                                                                 |
-| Serpentine vs TSP                          | **TSP default**, serpentine implemented as benchmark and fallback toggle                                                           | TSP is the graded substance; the baseline turns a claim into a measured result                                                                                        |
-| Supabase for shared lists                  | **No backend.** Sharing via URL-encoded list state                                                                                 | Accounts and sync add risk and weaken offline, and demonstrate nothing the course assesses                                                                            |
-| Floorplan fidelity                         | **Schematic throughout**; edge weights default to geometric distance, replaced by pace counts once walked                          | Routes depend on topology and relative distance, not absolute geometry                                                                                                |
-| Team structure                             | **No roles.** Ownership per task, WIP limit of two                                                                                 | Six people who each understand one sixth of the system cannot review each other's work or write the report                                                            |
-| Repo visibility                            | **Public**                                                                                                                         | Unlimited Actions minutes, free Codecov, portfolio value; nothing sensitive in the repo                                                                               |
-| Catalogue delivery                         | **Tiered**: budgeted core precached, display lazy via IndexedDB                                                                    | A single unbudgeted bundle makes offline, the headline feature, the first thing to break on a real phone                                                              |
-| Drop the offline requirement to solve size | **Rejected**                                                                                                                       | Fails inside the building the app exists for, and turns a one-time download into a per-session one; it also removes the justification for the whole no-backend design |
-| Search index construction                  | **Prebuilt at data-build time**, shipped as an asset                                                                               | Index build at startup, not query latency, is what misses the target at 30k products on an old phone                                                                  |
-| Server-side database for the catalogue     | **No** (client-side IndexedDB instead)                                                                                             | A backend reintroduces latency, deploy dependency and the loss of offline search, and demonstrates nothing the course assesses                                        |
-| Route shape                                | **Split into legs**: `start`, item `stops` each carrying the leg that reaches it, and `end` with the final leg; no single polyline | Map needs per-leg greying, highlighting and auto-zoom; pin numbers match the list because entrance and checkout are not stops                                         |
-| Graph format                               | `{ version, nodes, edges, shelves }`, edges stored once, shelves as data                                                           | One format for editor, router and CI; shelves must be clickable and matchable                                                                                         |
-| Coordinates                                | **Metres**, origin top-left, y down                                                                                                | Edge weights can default to geometric distance until paced; no unit conversions                                                                                       |
-| List items                                 | `id` + `quantity` on every `ListItem`                                                                                              | Stable identity for reorder, check-off and React keys                                                                                                                 |
-| Rendering code                             | Pure geometry in `core`, React SVG in `map-render`                                                                                 | `core` stays framework-free                                                                                                                                           |
-| Graph source                               | `data/graph/` per section; merged into `data/build/core/graph.json`                                                                | Parallel mapping without conflicts; hand-edited and generated files kept apart                                                                                        |
-| Placement → node                           | Placement stores `shelfId` only; node derived from `Shelf.accessNodeId` at build time                                              | One source of truth for where you stand to reach a shelf                                                                                                              |
-| Core placement data                        | `EAN → { nodeId, categoryId }` plus `CategoryPlacement`, both core tier                                                            | Core alone must resolve every list entry and apply the frozen-last constraint                                                                                         |
-| Search index payload                       | `{ ean, name }`                                                                                                                    | Offline results render a name without the display tier                                                                                                                |
-| Hosting                                    | **Netlify**                                                                                                                        | `netlify.toml` committed; static deploy with HTTPS                                                                                                                    |
-| Map editor deployment                      | **Local-only**                                                                                                                     | Used at a desk by one person; no reason to host it                                                                                                                    |
-| Scraper                                    | **`ruoka` MCP server** (`p18a/mcp-k-ruoka` plus a local location patch), kept outside the repo                                     | Already returns store-specific name, price and shelf location; upstream has no licence, so only its output is committed                                               |
+| Question                                   | Decision                                                                                                                                                              | Why                                                                                                                                                                   |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Generic vs SKU list entries                | **Both, generic by default**; generic resolves through `CategoryPlacement` before routing                                                                             | Matches how people write lists; avoids the generalised TSP in the MVP                                                                                                 |
+| Serpentine vs TSP                          | **TSP default**, serpentine implemented as benchmark and fallback toggle                                                                                              | TSP is the graded substance; the baseline turns a claim into a measured result                                                                                        |
+| Supabase for shared lists                  | **No backend.** Sharing via URL-encoded list state                                                                                                                    | Accounts and sync add risk and weaken offline, and demonstrate nothing the course assesses                                                                            |
+| Floorplan fidelity                         | **Schematic throughout**; edge weights default to geometric distance, replaced by pace counts once walked                                                             | Routes depend on topology and relative distance, not absolute geometry                                                                                                |
+| Team structure                             | **No roles.** Ownership per task, WIP limit of two                                                                                                                    | Six people who each understand one sixth of the system cannot review each other's work or write the report                                                            |
+| Repo visibility                            | **Public**                                                                                                                                                            | Unlimited Actions minutes, free Codecov, portfolio value; nothing sensitive in the repo                                                                               |
+| Catalogue delivery                         | **Tiered**: budgeted core precached, display lazy via IndexedDB                                                                                                       | A single unbudgeted bundle makes offline, the headline feature, the first thing to break on a real phone                                                              |
+| Drop the offline requirement to solve size | **Rejected**                                                                                                                                                          | Fails inside the building the app exists for, and turns a one-time download into a per-session one; it also removes the justification for the whole no-backend design |
+| Search index construction                  | **Prebuilt at data-build time**, shipped as an asset                                                                                                                  | Index build at startup, not query latency, is what misses the target at 30k products on an old phone                                                                  |
+| Server-side database for the catalogue     | **No** (client-side IndexedDB instead)                                                                                                                                | A backend reintroduces latency, deploy dependency and the loss of offline search, and demonstrates nothing the course assesses                                        |
+| Route shape                                | **Split into legs**: `start`, item `stops` each carrying the leg that reaches it, and `end` with the final leg; no single polyline                                    | Map needs per-leg greying, highlighting and auto-zoom; pin numbers match the list because entrance and checkout are not stops                                         |
+| Graph format                               | `{ version, nodes, edges, shelves }`, edges stored once, shelves as data                                                                                              | One format for editor, router and CI; shelves must be clickable and matchable                                                                                         |
+| Coordinates                                | **Metres**, origin top-left, y down                                                                                                                                   | Edge weights can default to geometric distance until paced; no unit conversions                                                                                       |
+| List items                                 | `id` + `quantity` on every `ListItem`                                                                                                                                 | Stable identity for reorder, check-off and React keys                                                                                                                 |
+| Rendering code                             | Pure geometry in `core`, React SVG in `map-render`                                                                                                                    | `core` stays framework-free                                                                                                                                           |
+| Graph source                               | `data/graph/` per section; merged into `data/build/core/graph.json`                                                                                                   | Parallel mapping without conflicts; hand-edited and generated files kept apart                                                                                        |
+| Placement → node                           | Placement stores `shelfId` only; node derived from `Shelf.accessNodeId` at build time                                                                                 | One source of truth for where you stand to reach a shelf                                                                                                              |
+| Core placement data                        | `EAN → { nodeId, categoryId }` plus `CategoryPlacement`, both core tier                                                                                               | Core alone must resolve every list entry and apply the frozen-last constraint                                                                                         |
+| Search index payload                       | `{ ean, name }`                                                                                                                                                       | Offline results render a name without the display tier                                                                                                                |
+| Search ranking and loading                 | **Ranked by Kesko popularity.** A **hot index** of the most popular products loads first; the **full index** loads in a Web Worker straight after. **Both precached** | Speed over size: nobody should wait to find milk. Popularity decides load order, not what is offline, so full offline search is kept                                  |
+| Search speed targets                       | Keystroke → results under **50 ms**; app open → first search under **500 ms**; milk first within 1–3 keystrokes                                                       | Replaces the earlier 100 ms / 2 s targets; the hot index exists to hit them                                                                                           |
+| Hosting                                    | **Netlify**                                                                                                                                                           | `netlify.toml` committed; static deploy with HTTPS                                                                                                                    |
+| Map editor deployment                      | **Local-only**                                                                                                                                                        | Used at a desk by one person; no reason to host it                                                                                                                    |
+| Scraper                                    | **`scraper/export-kupittaa.ts`**, reusing the `p18a/mcp-k-ruoka` browser session from a sibling clone                                                                 | Returns store-specific name, price, popularity and shelf location; upstream has no licence, so its code is loaded at runtime, not copied                              |
 
 ### Documented as future work, not as oversights
 
@@ -1040,3 +1087,5 @@ time to fix what it reveals.
 - Stride length calibration for pace counting (measure per person, or agree one value)
 - Whether the route-mode toggle is user-visible or a developer flag
 - How many test lists the benchmark uses, and how they are generated
+- Hot-index size (top N products), set by measurement against the §14 targets
+- Whether products with no Kupittaa location are searchable at all
