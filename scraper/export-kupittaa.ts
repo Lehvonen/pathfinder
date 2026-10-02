@@ -30,7 +30,7 @@
  * Output, in scraper/cache/kupittaa/ (gitignored):
  *   queue.json        every listed product: ean, name, brand, price, slug, category
  *   products.ndjson   one record per product with its location, appended as it goes
- *   kupittaa.csv      ean;name;brand;price;unit price;location, one row per product
+ *   kupittaa.csv      ean;name;brand;price;unit price;location;popularity, one row per product
  */
 import {
   appendFileSync,
@@ -459,7 +459,28 @@ const CSV_COLUMNS = [
   'level',
   'zone',
   'department_order',
+  'popularity',
+  'popularity_rank',
 ] as const;
+
+/**
+ * 1 = most popular. Ties share a rank and the next rank skips (1, 2, 2, 4), so products
+ * K-Ruoka scores 0 all share the last rank. Uses the listing's score, which every product
+ * has, so all ranks come from the same source.
+ */
+function popularityRanks(items: QueueItem[]): Map<string, number> {
+  const sorted = [...items].sort((a, b) => b.popularity - a.popularity);
+  const ranks = new Map<string, number>();
+  sorted.forEach((item, i) => {
+    const previous = sorted[i - 1];
+    const rank =
+      previous && previous.popularity === item.popularity
+        ? (ranks.get(previous.ean) ?? i + 1)
+        : i + 1;
+    ranks.set(item.ean, rank);
+  });
+  return ranks;
+}
 
 function csvCell(value: unknown): string {
   if (value === null || value === undefined) return '';
@@ -480,6 +501,7 @@ function writeCsv() {
     if (ean && !record.error) located.set(ean, record);
   }
 
+  const ranks = popularityRanks([...queue.values()]);
   const rows = [...queue.values()].map((item) => {
     const record = located.get(item.ean);
     const loc = record && isObject(record.location) ? record.location : null;
@@ -496,6 +518,8 @@ function writeCsv() {
       level: loc?.level,
       zone: dept?.zone,
       department_order: dept?.orderNumber,
+      popularity: item.popularity.toFixed(1).replace('.', ','),
+      popularity_rank: ranks.get(item.ean),
     };
     return CSV_COLUMNS.map((column) => csvCell(row[column])).join(';');
   });

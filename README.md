@@ -134,7 +134,7 @@ Run from the repo root. It works in two phases:
 
 Everything goes to `scraper/cache/kupittaa/`, which is gitignored:
 
-- `kupittaa.csv`: one row per product, `ean;name;brand;price;unit_price;department;shelf;level;zone;department_order`. Semicolons and decimal commas, so Excel with Finnish settings opens it in columns
+- `kupittaa.csv`: one row per product, `ean;name;brand;price;unit_price;department;shelf;level;zone;department_order;popularity;popularity_rank`. Semicolons and decimal commas, so Excel with Finnish settings opens it in columns
 - `queue.json`: every product found in the listing (EAN, name, brand, price, URL slug, popularity, category)
 - `products.ndjson`: one line per product whose location has been fetched, for example (shortened)
 

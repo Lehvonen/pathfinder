@@ -82,11 +82,11 @@ Progress is saved, so just rerun later.
 
 All in `scraper/cache/kupittaa/`:
 
-| File              | Contents                                                                                                                                                                                                                                                         |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `kupittaa.csv`    | One row per product: `ean;name;brand;price;unit_price;department;shelf;level;zone;department_order`. Semicolons and decimal commas, so Excel with Finnish settings opens it in columns. Location columns are empty until the location phase reaches that product |
-| `queue.json`      | Every product from the listing: EAN, name, brand, price, unit price, URL slug, popularity, category                                                                                                                                                              |
-| `products.ndjson` | One JSON line per product whose location has been fetched                                                                                                                                                                                                        |
+| File              | Contents                                                                                                                                                                                                                                                                                    |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kupittaa.csv`    | One row per product: `ean;name;brand;price;unit_price;department;shelf;level;zone;department_order;popularity;popularity_rank`. Semicolons and decimal commas, so Excel with Finnish settings opens it in columns. Location columns are empty until the location phase reaches that product |
+| `queue.json`      | Every product from the listing: EAN, name, brand, price, unit price, URL slug, popularity, category                                                                                                                                                                                         |
+| `products.ndjson` | One JSON line per product whose location has been fetched                                                                                                                                                                                                                                   |
 
 Example `products.ndjson` line (shortened):
 
@@ -111,6 +111,7 @@ Good to know about the data:
 
 - **Shelf numbers are per store.** The same milk is shelf 05 in Kupittaa and shelf 31 in Iso Omena.
 - **`department_order`** looks like the store's own walking order (coffee 12, milk 68). It could be useful for routing, but that is not confirmed.
+- **`popularity`** is K-Ruoka's own score (undocumented, higher = more popular). **`popularity_rank`** is 1 for the most popular; ties share a rank, so the many products scored 0 all share the last rank.
 - **Some department names are internal labels**, such as "KORVAA ITSE", not the text on the store's signs.
 - **Shelf `00` / level `0` means "department only".** Common outside groceries (cosmetics, books, leisure): the store records the department but no shelf. Route to the department, not a shelf.
 - **No location at all is expected for some products.** These are typically web-shop items such as clothing or sports gear, and k-ruoka.fi shows no store location for them either (checked by hand). They are not scraper errors.
