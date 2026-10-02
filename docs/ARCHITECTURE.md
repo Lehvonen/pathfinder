@@ -57,8 +57,8 @@ in the browser.
 
 ```
 ┌────────────────────┐
-│  Scraper (Python)  │   offline, run manually / scheduled
-│  K-Ruoka → JSON    │
+│  Scraper (`ruoka`) │   offline, run manually / scheduled
+│  K-Ruoka → JSON    │   see §7
 └─────────┬──────────┘
           │ products.json, placements.json
           ▼
@@ -125,7 +125,7 @@ Revisit only after submission, if the app is actually being used.
 | State              | Zustand                                                    | Lighter than Redux, avoids prop-drilling to the map            |
 | Persistence        | `localStorage` (lists) + IndexedDB (display records)       | Lists are tiny; full product records should not sit in JS heap |
 | PWA                | `vite-plugin-pwa`                                          | Manifest + service worker with minimal config                  |
-| Scraper            | Python + `httpx` + `selectolax`                            | Better ergonomics for scraping and cleanup                     |
+| Scraper            | `ruoka` MCP server (Bun + Playwright), outside the repo    | Already working, returns name, price and in-store location     |
 | Hosting            | Netlify, free tier                                         | Static deploy, HTTPS included (required for PWA)               |
 
 **Deliberately not used:**
@@ -161,8 +161,8 @@ Revisit only after submission, if the app is actually being used.
 │
 ├── .env.example             committed; VITE_DATA_SOURCE etc.
 │
-├── scraper/                 Python, outputs JSON
-│   ├── fetch.py             rate-limited fetch + raw response cache
+├── scraper/                 workspace package; the `ruoka` session it uses lives outside, see §7
+│   ├── export-kupittaa.ts   whole-store export: products + in-store location → cache/
 │   ├── normalise.py         raw → schema
 │   ├── diff.py              compare scrapes, report moved/removed products
 │   └── cache/               raw responses, gitignored
@@ -280,8 +280,12 @@ summarised in §17, but where the two differ, `types.ts` is authoritative.
 
 ## 7. Data Pipeline
 
-1. `fetch.py` pulls product pages, rate-limited, writing raw responses to
-   `scraper/cache/`. Development never re-hits the site.
+1. The `ruoka` scraper (below) pulls products with their in-store location, rate-limited,
+   writing raw responses to `scraper/cache/`. Development never re-hits the site.
+   The whole-store export is `scraper/export-kupittaa.ts`, which reuses the `ruoka`
+   browser session: it lists every product by category, then fetches each one's location
+   from `/kr-api/v4/products/<slug>?storeId=N119`, one request every 1.5 s, resumable,
+   stopping on any block. Output: `scraper/cache/kupittaa/products.ndjson`.
 2. `normalise.py` parses the cache into `products`, `placements`, `categories`,
    deduplicating on EAN.
 3. Shelf IDs are matched against the shelves in `graph.json`, and each placement's
@@ -300,6 +304,71 @@ summarised in §17, but where the two differ, `types.ts` is authoritative.
 **Scraping etiquette:** rate-limit, cache aggressively, scrape once into a bundle
 rather than hitting K-Ruoka live per user request. The project is non-commercial and
 unaffiliated, so avoid K-Citymarket branding in the UI.
+
+### The scraper: `ruoka` MCP server
+
+The working scraper is [`p18a/mcp-k-ruoka`](https://github.com/p18a/mcp-k-ruoka), an
+unofficial MCP server, with a local patch that adds in-store locations. It runs as a
+Claude Code MCP server called `ruoka`, so product data can be pulled from a chat
+("where is maito in Kupittaa?") as well as from scripts.
+
+**What it returns.** `search_products` returns, per product, at the selected store:
+
+| Field                      | Example (K-Citymarket Kupittaa)                          | Source                       |
+| -------------------------- | -------------------------------------------------------- | ---------------------------- |
+| `id`                       | `6410405082657` (EAN)                                    | search API                   |
+| `name`                     | `Pirkka suomalainen kevytmaito 1l`                       | search API                   |
+| `price`                    | `0.89`, plus `unitPrice` `0,89 €/l`                      | search API, store-specific   |
+| `brand`                    | `Pirkka`                                                 | search API                   |
+| `category`                 | `Maito, juusto, munat ja rasvat`                         | search API                   |
+| `location.department`      | `(MAITO) Maidot ja piimät - KORVAA ITSE`                 | product page, store-specific |
+| `location.departmentOrder` | `68`                                                     | product page, store-specific |
+| `location.shelf`           | `05` (K-Ruoka calls it `module`; the site shows "Hylly") | product page, store-specific |
+| `location.level`           | `1` (shelf level, "Taso")                                | product page, store-specific |
+| `location.zone`            | `KERÄILY`                                                | product page, store-specific |
+
+`get_stores` lists store IDs, optionally filtered by city.
+
+**Where the location comes from.** The search API has no shelf data. The product page,
+`/kauppa/tuote/<urlSlug>?kauppa=<store slug>`, embeds `product.location` for the
+selected store, and the patch reads it from there: one page load per result, five in
+parallel. Shelf numbers are per store (the same milk is shelf 31 in Iso Omena and 05 in
+Kupittaa), so the store must always be passed. `departmentOrder` looks like the store's
+own walking order, which is worth testing as a routing hint. Some departments are marked
+`isPublic: false`, so their names are internal labels rather than signage text.
+
+**Defaults.** The server is registered with `DEFAULT_CHAIN=k-ruoka` and
+`DEFAULT_STORE_ID=N119` (K-Citymarket Turku Kupittaa), so a search needs only a query.
+`includeLocation` defaults to `true`; set it to `false` for faster searches without
+locations.
+
+**Why it lives outside the repo.** The upstream repository has no licence, so its code
+is not copied into this public repo, and it is a separate Bun project rather than a
+pnpm workspace package. Only its output belongs here, under `scraper/cache/`.
+
+**Setup** (once per machine, Windows paths shown):
+
+```
+npm i -g bun
+git clone https://github.com/p18a/mcp-k-ruoka.git C:/dev/mcp-k-ruoka
+cd C:/dev/mcp-k-ruoka && bun install && bunx playwright install chromium
+# apply the location patch: src/browser/k-ruoka.ts, src/tools/search.ts, src/types.ts
+claude mcp add --scope user ruoka -e DEFAULT_CHAIN=k-ruoka -e DEFAULT_STORE_ID=N119 -- bun run C:/dev/mcp-k-ruoka/src/index.ts --stdio
+claude mcp get ruoka    # should show ✔ Connected
+```
+
+Restart Claude Code after adding it. The patch currently exists only as uncommitted
+changes in one local clone; it needs a home (a fork, or a patch file under `scraper/`)
+before anyone else can set this up.
+
+**Caveats.**
+
+- **Unofficial.** It reads K-Ruoka's internal API and page data, so a site change can
+  break it. A broken location lookup returns `location: null` rather than failing the
+  search, so check for nulls after every run.
+- **Bot-protection bypass.** It gets past Cloudflare with a Playwright stealth plugin.
+  Make sure that fits what Kesko has agreed to before any large or scheduled run, and
+  keep to the etiquette above either way.
 
 ---
 
@@ -546,7 +615,9 @@ Monday. This outranks every checkbox below.
 ### Track B — Product data
 
 - [ ] **Reconnaissance visit, week 1.** Check twenty scraped shelf IDs against physical shelf labels. The entire design assumes these match; find out before three weeks are spent on it
-- [ ] `fetch.py` — rate-limited, raw responses cached to `scraper/cache/`
+- [x] `ruoka` scraper working: name, price and in-store location (department, shelf, level) per product at Kupittaa, see §7
+- [ ] `ruoka` location patch given a home (fork or patch file) so the whole team can set it up
+- [ ] Whole-store export (`scraper/export-kupittaa.ts`) written — first full run, output in `scraper/cache/kupittaa/`
 - [ ] `normalise.py` — raw → schema, EAN dedup, multi-placement handled, **no price, images or descriptions**
 - [ ] Full scrape reviewed by hand for junk, duplicates, missing shelves
 - [ ] Shelf IDs matched against `graph.json`; unmatched logged as errors, never dropped _(ready when: a real graph exists at any fidelity)_
@@ -954,6 +1025,7 @@ time to fix what it reveals.
 | Search index payload                       | `{ ean, name }`                                                                                                                    | Offline results render a name without the display tier                                                                                                                |
 | Hosting                                    | **Netlify**                                                                                                                        | `netlify.toml` committed; static deploy with HTTPS                                                                                                                    |
 | Map editor deployment                      | **Local-only**                                                                                                                     | Used at a desk by one person; no reason to host it                                                                                                                    |
+| Scraper                                    | **`ruoka` MCP server** (`p18a/mcp-k-ruoka` plus a local location patch), kept outside the repo                                     | Already returns store-specific name, price and shelf location; upstream has no licence, so only its output is committed                                               |
 
 ### Documented as future work, not as oversights
 
