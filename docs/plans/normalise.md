@@ -1,7 +1,6 @@
 # Plan: data cleaner (`normalise.ts`)
 
-**Status:** in progress: rules, categories, departments, validation, report and CLI
-implemented; the reviewed department table and the first committed output are pending
+**Status:** done except §7 step 7 (`data/mock/`); the §8 decisions are awaiting agreement
 **Architecture refs:** §6 (data model), §7 step 2 (normalise), §13 Track B, §14 (budget)
 **Covers checklist items:** "`normalise.ts` — raw → schema" and "Full scrape reviewed by hand
 for junk, duplicates, missing shelves"
@@ -89,7 +88,7 @@ stops the run with its name and the first problems.
 
 **Why commit `data/normalised/`:** the raw cache is gitignored and exists on one laptop.
 Committing the cleaned output gives the other five people real data without an 18-hour
-scrape. It's also the baseline `diff.ts` compares against. It should be a few MB of JSON.
+scrape. It's also the baseline `diff.ts` compares against. It is about 8.5 MB of JSON.
 
 **Why `category-ids.json` is append-only:** category ids are interned integers (§14), and
 generic list entries store `categoryId` in saved lists and share links. If a re-scrape
@@ -203,10 +202,12 @@ scraper/
 1. Done: `load.ts` + `clean.ts` with tests: join, EAN check, exclusions, text cleaning,
    shelf ID, level.
 2. Done: `categories.ts` with tests: tree from paths, append-only ids, temperature vote.
-3. Department skeleton generation (code done). Fill the table by hand (pair session, ~1 h).
-4. `schema.ts`, `report.ts`, CLI (code done). First full run, commit `data/normalised/`.
-5. Produce is scraped (§2, done). Re-run, fill the new department rows, commit again.
-6. Read `report.md` by hand. Tick "Full scrape reviewed" in §13.
+3. Done: department skeleton generation, and the table reviewed by hand.
+4. Done: `schema.ts`, `report.ts`, CLI; first full run, `data/normalised/` committed.
+5. Done: produce scraped (§2) before the first run, so steps 4 and 5 became a single
+   commit of `data/normalised/`.
+6. Read `report.md` by hand. Tick "Full scrape reviewed" in §13 once the mixed-temperature
+   categories are settled (overrides, a follow-up PR).
 7. Cut 50 products across chilled, frozen and ambient from the output for `data/mock/`,
    if the contract sprint hasn't produced one yet.
 
