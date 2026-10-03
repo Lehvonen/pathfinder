@@ -18,7 +18,7 @@ Cloned somewhere else? Set `MCP_K_RUOKA_DIR` to that folder when you run the scr
 
 It runs in two phases:
 
-1. **Listing (`collect`)**: pages through the store, 100 products per request, saving **EAN, name, brand and price**. About 450 requests, roughly **10 minutes**.
+1. **Listing (`collect`)**: pages through the store, 100 products per request, saving **EAN, name, brand and price**. Several hundred requests, roughly **25 minutes**: large listings are split into categories, because K-Ruoka pages only about 1,000 products per listing.
 2. **Locations (`scrape`)**: the listing has no shelf data, so this fetches each product's **department, shelf and level** one request at a time. About 44k products at 1.5 s each, roughly **18 hours**. Most popular products go first.
 
 `csv` merges both into a spreadsheet at any point.
@@ -30,7 +30,7 @@ Run from the repo root (`C:\dev\pathfinder`).
 | Command                                                             | What it does                                                                         | When to use it                                                              |
 | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
 | `bun run scraper/export-kupittaa.ts`                                | Full run: listing, then every location, then the CSV                                 | The normal 18-hour run, e.g. overnight                                      |
-| `bun run scraper/export-kupittaa.ts collect`                        | Listing only: EAN, name, brand and price for every product (~10 min)                 | You need the catalogue and prices, not locations, or want to refresh prices |
+| `bun run scraper/export-kupittaa.ts collect`                        | Listing only: EAN, name, brand and price for every product (~25 min)                 | You need the catalogue and prices, not locations, or want to refresh prices |
 | `bun run scraper/export-kupittaa.ts scrape`                         | Locations only, for listed products not fetched yet. Skips the listing               | Resuming after an interruption                                              |
 | `bun run scraper/export-kupittaa.ts csv`                            | Writes `kupittaa.csv` from everything fetched so far. No network                     | Any time you want a spreadsheet, even mid-run                               |
 | `bun run scraper/export-kupittaa.ts status`                         | Counts: listed, fetched, with location, without, errors. No network                  | Checking progress                                                           |
@@ -60,7 +60,7 @@ If it stops after 6 hours, those 6 hours (~14,000 products) are kept. Rerun and 
 | Situation                                 | Command                                                                      |
 | ----------------------------------------- | ---------------------------------------------------------------------------- |
 | Closed it, crashed, PC restarted or slept | `bun run scraper/export-kupittaa.ts scrape`                                  |
-| Same, but refresh names and prices first  | `bun run scraper/export-kupittaa.ts` (adds ~10 min)                          |
+| Same, but refresh names and prices first  | `bun run scraper/export-kupittaa.ts` (adds ~25 min)                          |
 | It stopped itself on a block (403, 429)   | Wait a while, then `DELAY_MS=3000 bun run scraper/export-kupittaa.ts scrape` |
 | Start completely over                     | Delete `scraper/cache/kupittaa/`, then run again                             |
 
@@ -74,7 +74,7 @@ One request at a time, with `DELAY_MS` between them. The scraper **stops by itse
 
 - HTTP 401, 403, 429 or 503
 - an HTML page instead of JSON (usually a Cloudflare check)
-- a response for a store other than Kupittaa
+- a listing response for a store other than Kupittaa. In the location phase such a product is saved as an error record and skipped instead, so a rerun can get past it
 
 Progress is saved, so just rerun later.
 
@@ -86,7 +86,7 @@ All in `scraper/cache/kupittaa/`:
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `kupittaa.csv`    | One row per product: `ean;name;brand;price;unit_price;department;shelf;level;zone;department_order;popularity;popularity_rank`. Semicolons and decimal commas, so Excel with Finnish settings opens it in columns. Location columns are empty until the location phase reaches that product |
 | `queue.json`      | Every product from the listing: EAN, name, brand, price, unit price, URL slug, popularity, category                                                                                                                                                                                         |
-| `products.ndjson` | One JSON line per product whose location has been fetched                                                                                                                                                                                                                                   |
+| `products.ndjson` | One JSON line per product whose location has been fetched, or an error record (counted as errors in `status`)                                                                                                                                                                               |
 
 Example `products.ndjson` line (shortened):
 
