@@ -27,17 +27,18 @@ It runs in two phases:
 
 Run from the repo root (`C:\dev\pathfinder`).
 
-| Command                                                             | What it does                                                                         | When to use it                                                              |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| `bun run scraper/export-kupittaa.ts`                                | Full run: listing, then every location, then the CSV                                 | The normal 18-hour run, e.g. overnight                                      |
-| `bun run scraper/export-kupittaa.ts collect`                        | Listing only: EAN, name, brand and price for every product (~25 min)                 | You need the catalogue and prices, not locations, or want to refresh prices |
-| `bun run scraper/export-kupittaa.ts scrape`                         | Locations only, for listed products not fetched yet. Skips the listing               | Resuming after an interruption                                              |
-| `bun run scraper/export-kupittaa.ts csv`                            | Writes `kupittaa.csv` from everything fetched so far. No network                     | Any time you want a spreadsheet, even mid-run                               |
-| `bun run scraper/export-kupittaa.ts status`                         | Counts: listed, fetched, with location, without, errors. No network                  | Checking progress                                                           |
-| `EXTRA_CATEGORIES=a/b,c/d bun run scraper/export-kupittaa.ts extra` | Lists only the given categories, adds new products to the queue, then writes the CSV | Filling the gaps a `⚠ … subcategories cover X of Y` warning points at       |
-| `LIMIT=20 bun run scraper/export-kupittaa.ts`                       | Listing, then locations for the 20 most popular products only                        | First run: check the output looks right before the long run                 |
-| `LIMIT=2000 bun run scraper/export-kupittaa.ts`                     | Listing, then locations for the 2,000 most popular (~1 h)                            | Covering what most shopping lists contain without waiting 18 h              |
-| `pnpm --filter @pathfinder/scraper export:kupittaa`                 | Same as the full run, through pnpm                                                   | If you prefer pnpm scripts                                                  |
+| Command                                                             | What it does                                                                                           | When to use it                                                              |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `bun run scraper/export-kupittaa.ts`                                | Full run: listing, then every location, then the CSV                                                   | The normal 18-hour run, e.g. overnight                                      |
+| `bun run scraper/export-kupittaa.ts collect`                        | Listing only: EAN, name, brand and price for every product (~25 min)                                   | You need the catalogue and prices, not locations, or want to refresh prices |
+| `bun run scraper/export-kupittaa.ts scrape`                         | Locations only, for listed products not fetched yet. Skips the listing                                 | Resuming after an interruption                                              |
+| `bun run scraper/export-kupittaa.ts csv`                            | Writes `kupittaa.csv` from everything fetched so far. No network                                       | Any time you want a spreadsheet, even mid-run                               |
+| `bun run scraper/export-kupittaa.ts status`                         | Counts: listed, fetched, with location, without, errors. No network                                    | Checking progress                                                           |
+| `bun run scraper/normalise.ts`                                      | Cleans the scrape into `data/normalised/`, see [Cleaning the scrape](#cleaning-the-scrape). No network | After a scrape. Also `pnpm --filter @pathfinder/scraper normalise`          |
+| `EXTRA_CATEGORIES=a/b,c/d bun run scraper/export-kupittaa.ts extra` | Lists only the given categories, adds new products to the queue, then writes the CSV                   | Filling the gaps a `⚠ … subcategories cover X of Y` warning points at       |
+| `LIMIT=20 bun run scraper/export-kupittaa.ts`                       | Listing, then locations for the 20 most popular products only                                          | First run: check the output looks right before the long run                 |
+| `LIMIT=2000 bun run scraper/export-kupittaa.ts`                     | Listing, then locations for the 2,000 most popular (~1 h)                                              | Covering what most shopping lists contain without waiting 18 h              |
+| `pnpm --filter @pathfinder/scraper export:kupittaa`                 | Same as the full run, through pnpm                                                                     | If you prefer pnpm scripts                                                  |
 
 Settings go in front of the command, e.g. `DELAY_MS=3000 LIMIT=500 bun run scraper/export-kupittaa.ts`:
 
@@ -116,6 +117,67 @@ Good to know about the data:
 - **Some department names are internal labels**, such as "KORVAA ITSE", not the text on the store's signs.
 - **Shelf `00` / level `0` means "department only".** Common outside groceries (cosmetics, books, leisure): the store records the department but no shelf. Route to the department, not a shelf.
 - **No location at all is expected for some products.** These are typically web-shop items such as clothing or sports gear, and k-ruoka.fi shows no store location for them either (checked by hand). They are not scraper errors.
+
+## Cleaning the scrape
+
+`scraper/normalise.ts` turns the scrape into the records the app is built from, shaped like `packages/core/src/types.ts`, and writes them to `data/normalised/` (committed). The rules and the reasoning are in `docs/plans/normalise.md`.
+
+```bash
+bun run scraper/normalise.ts
+```
+
+It reads `queue.json`, `products.ndjson` and `category-names.json` from the cache, plus two files in `data/curation/` that people maintain:
+
+| File                             | What it is                                                                                        |
+| -------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `data/curation/departments.json` | One row per store department: what kind it is and how cold. Reviewed by hand, see below           |
+| `data/curation/categories.json`  | Optional. `category path → ambient / chilled / frozen`, for categories whose vote comes out wrong |
+
+Every input is checked first. A typo such as `"kind": "junkk"` or broken JSON stops the run with the file and the problem, before anything is written.
+
+### Reviewing the department table
+
+The first run, and any run after a scrape that finds a new department, adds guessed rows to `data/curation/departments.json` and **stops**:
+
+```
+202 departments in data/curation/departments.json are unreviewed. …
+```
+
+Nothing is written to `data/normalised/` until every row is reviewed. `data/normalised/report.md` is still written, with product counts per department to help. For each row:
+
+```json
+{
+  "id": "91208",
+  "name": "(MAITO) Maidot ja piimät - KORVAA ITSE",
+  "kind": "aisle",
+  "temperature": "chilled",
+  "reviewed": false
+}
+```
+
+- **`kind`**: `aisle`, `counter` (service counters, e.g. PTISKI), `backroom` or `junk`. Products in `backroom` and `junk` departments are left out: these are staff notes such as "JÄTÄ SUORAAN PUUTTEEKSI!" or pickup codes, not places a shopper can go
+- **`temperature`**: `ambient`, `chilled` or `frozen`. It decides frozen-last routing for the department's categories
+- **`label`** (optional): a signage-style name when the K-Ruoka name is an internal label, e.g. `"Maidot ja piimät"`
+- **Delete `"reviewed": false`** once the row is checked
+- **Don't edit `name`**: it is K-Ruoka's name, refreshed from every scrape so you can tell what the row is
+
+Run it again when every row is reviewed. Your decisions are kept on every later run; only `name` is refreshed, and a department that disappears from a scrape stays in the table.
+
+### Output
+
+All in `data/normalised/`, one record per line so a re-scrape shows up in git diffs product by product:
+
+| File                | Contents                                                                                               |
+| ------------------- | ------------------------------------------------------------------------------------------------------ |
+| `products.json`     | Every product the app knows: EAN, name, brand, category id                                             |
+| `placements.json`   | Where each product is: shelf id `<department id>:<shelf>`, shelf level. `:00` means department only    |
+| `categories.json`   | The category tree with Finnish names and temperatures                                                  |
+| `category-ids.json` | Category path → id. **Append-only**: saved shopping lists store these ids, so never renumber or delete |
+| `popularity.json`   | EAN → K-Ruoka popularity, `null` for unranked. Used at build time only                                 |
+| `departments.json`  | The reviewed department table plus each department's shelves and product count, for the map work       |
+| `report.md`         | What was left out and why, departments to review, mixed-temperature categories. Read it after each run |
+
+Products with no store location (web-shop items) and unavailable products (shopping bags) are left out; `report.md` lists them by reason.
 
 ## Troubleshooting
 
