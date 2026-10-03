@@ -8,9 +8,9 @@
  *
  * Reads:
  *   scraper/cache/kupittaa/queue.json, products.ndjson   the scrape (export-kupittaa.ts)
+ *   scraper/cache/kupittaa/category-names.json           path → Finnish name, from the listing
  *   data/curation/departments.json                       hand-reviewed; new rows added here
  *   data/curation/categories.json                        optional: path → temperature
- *   data/curation/category-names.json                    optional: path → display name
  *   data/normalised/category-ids.json                    append-only id registry
  *
  * Writes data/normalised/: products.json, placements.json, categories.json,
@@ -94,7 +94,8 @@ const departmentsFile = join(CURATION_DIR, 'departments.json');
 const categoryIdsFile = join(OUT_DIR, 'category-ids.json');
 const table = readJson(departmentsFile, curatedDepartmentsSchema, []);
 const ids = readJson(categoryIdsFile, categoryIdsSchema, {});
-const names = readJson(join(CURATION_DIR, 'category-names.json'), categoryNamesSchema, {});
+// Written by the exporter's listing; a broken file means re-running `collect`
+const names = readJson(join(CACHE_DIR, 'category-names.json'), categoryNamesSchema, {});
 const overrides = readJson(join(CURATION_DIR, 'categories.json'), categoryOverridesSchema, {});
 
 // Departments first: every later step depends on the reviewed table
