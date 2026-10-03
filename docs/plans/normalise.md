@@ -1,6 +1,7 @@
 # Plan: data cleaner (`normalise.ts`)
 
-**Status:** plan, no code yet
+**Status:** in progress: rules, categories, departments, validation, report and CLI
+implemented; the reviewed department table and the first committed output are pending
 **Architecture refs:** §6 (data model), §7 step 2 (normalise), §13 Track B, §14 (budget)
 **Covers checklist items:** "`normalise.ts` — raw → schema" and "Full scrape reviewed by hand
 for junk, duplicates, missing shelves"
@@ -64,19 +65,26 @@ top-level category menu with the 26 in §1 to catch any other category missing t
 
 - `scraper/cache/kupittaa/queue.json`: name, brand, categoryPath, popularity
 - `scraper/cache/kupittaa/products.ndjson`: location, isAvailable
-- `data/curation/departments.json`: hand-maintained, see §5
+- `data/curation/departments.json`: hand-maintained, see §5; new departments are added to
+  it as unreviewed rows
+- `data/curation/categories.json`: optional, `categoryPath → temperature` overrides
+- `data/curation/category-names.json`: optional, `categoryPath → display name`
+- `data/normalised/category-ids.json`: the id registry from the previous run, read back
+
+Every input is checked against a Zod schema before anything is written; a malformed file
+stops the run with its name and the first problems.
 
 **Outputs** in `data/normalised/`, **committed**:
 
-| File                | Shape                                                | Used by                                      |
-| ------------------- | ---------------------------------------------------- | -------------------------------------------- |
-| `products.json`     | `Product[]`, sorted by EAN                           | `build-data.ts` → display tier, search index |
-| `placements.json`   | `Placement[]`, one primary per product               | shelf matching, `build-data.ts`              |
-| `categories.json`   | `Category[]`, with `parentId` and `temperature`      | core tier                                    |
-| `category-ids.json` | `categoryPath → id`, **append-only**                 | keeps ids stable across scrapes              |
-| `popularity.json`   | `EAN → score \| null` (0 → `null`, §6)               | `build-data.ts` only, never shipped          |
-| `departments.json`  | id, name, order, zone, shelves seen, product counts  | map editor, unmatched-shelf handoff          |
-| `report.md`         | exclusions by reason, warnings, per-department stats | the "reviewed by hand" step                  |
+| File                | Shape                                                                | Used by                                      |
+| ------------------- | -------------------------------------------------------------------- | -------------------------------------------- |
+| `products.json`     | `Product[]`, sorted by EAN                                           | `build-data.ts` → display tier, search index |
+| `placements.json`   | `Placement[]`, one primary per product                               | shelf matching, `build-data.ts`              |
+| `categories.json`   | `Category[]`, with `parentId` and `temperature`                      | core tier                                    |
+| `category-ids.json` | `categoryPath → id`, **append-only**                                 | keeps ids stable across scrapes              |
+| `popularity.json`   | `EAN → score \| null` (0 → `null`, §6)                               | `build-data.ts` only, never shipped          |
+| `departments.json`  | the reviewed row, `orderNumber`, `zone`, shelves seen, product count | map editor, unmatched-shelf handoff          |
+| `report.md`         | exclusions by reason, warnings, per-department stats                 | the "reviewed by hand" step                  |
 
 **Why commit `data/normalised/`:** the raw cache is gitignored and exists on one laptop.
 Committing the cleaned output gives the other five people real data without an 18-hour
@@ -89,10 +97,15 @@ renumbered the categories, saved lists would quietly point at the wrong category
 ## 4. Rules, in order
 
 1. **Join** queue and ndjson on EAN. The queue is the source for name, brand, categoryPath
-   and popularity. The ndjson is the source for location and availability. Last line wins
-   for a repeated EAN, and the repeat is logged.
+   and popularity; a missing or blank queued value falls back to the ndjson. The ndjson is
+   the source for location and availability. Last one wins for a repeated EAN in either
+   file, and the repeat is logged (`duplicate-record`, `duplicate-queue-entry`), as are
+   products queued but not fetched (`not-fetched`), fetched but not queued
+   (`not-queued`) and damaged ndjson lines (`damaged-line`). These are load issues, not
+   exclusions.
 2. **Validate the EAN**: 8, 12, 13 or 14 digits. Otherwise exclude with `bad-ean`.
-3. **Exclude**, each with a reason that appears in the report:
+3. **Exclude**, each with a reason that appears in the report; the first that applies wins:
+   - `no-name`: name missing or blank
    - `no-location`: `location` null, or department null
    - `unavailable`: `isAvailable: false`
    - `junk-department` / `backroom-department`: per the curated table
@@ -105,18 +118,26 @@ renumbered the categories, saved lists would quietly point at the wrong category
    ID. This routes "department only" products without changing `types.ts`. The K-Ruoka
    department id is used rather than the name, because names carry notes like
    "KORVAA ITSE" that change.
-6. **`shelfLevel`** = the level as a number, or undefined when it is `0`.
+6. **`shelfLevel`** = the level as a number, or undefined when it is `0`, not a number, or
+   on the department-wide shelf (a level means nothing without a shelf).
 7. **Placement**: exactly one per product, `isPrimary: true`. The scrape returns one
    location per EAN, so secondary placements don't exist yet. The type keeps room for them.
 8. **Category**: the leaf of `categoryPath`, with parents built from the path. A new
-   path gets the next id in `category-ids.json`. A missing path gets `uncategorised`.
+   path gets the next id in `category-ids.json`. Empty segments (an empty path, stray
+   slashes) are dropped; a missing or empty path gets `uncategorised`.
 9. **Temperature** per category: the majority temperature of its products' departments,
-   from the curated table. A category whose products split across temperatures is
-   reported, and a manual override in `data/curation/categories.json` wins.
+   from the curated table; a tie goes to the colder one. A manual override in
+   `data/curation/categories.json` wins for that category, and **travels upward only**:
+   each product votes with the deepest override on its path from its own category up, so
+   the parents of an overridden leaf follow it, but a parent's override never changes the
+   categories below it. A category whose (effective) votes split across temperatures is
+   reported as mixed, unless it is overridden.
 10. **Popularity**: `0` → `null`, otherwise the score.
-11. **Validate the output** against Zod schemas mirroring `types.ts`, plus: unique EANs,
-    every product has exactly one primary placement, every `categoryId` exists. These
-    schemas are the start of `scripts/validate-data.ts` (§5).
+11. **Validate the output** against Zod schemas whose types equal `types.ts` (checked by the
+    typecheck in both directions), plus: unique EANs, every product has exactly one
+    primary placement, every `categoryId` and `parentId` exists. Cross-checks run only on
+    records that passed their schema. The curation files are validated the same way
+    before use. These schemas are the start of `scripts/validate-data.ts` (§5).
 12. **Write deterministically**: sorted keys and records, fixed formatting, so a re-run on
     the same input produces no git diff.
 
@@ -125,30 +146,47 @@ renumbered the categories, saved lists would quietly point at the wrong category
 `data/curation/departments.json`, one row per K-Ruoka department id, hand-maintained:
 
 ```json
-{ "id": "91208", "kind": "aisle", "temperature": "chilled", "label": "Maidot ja piimät" }
+{
+  "id": "91208",
+  "name": "(MAITO) Maidot ja piimät - KORVAA ITSE",
+  "kind": "aisle",
+  "temperature": "chilled",
+  "label": "Maidot ja piimät",
+  "reviewed": false
+}
 ```
 
+- `name`: K-Ruoka's name, **refreshed from every scrape**, so the reviewer knows what the
+  row is. Edits to it are overwritten
+- `reviewed: false`: on rows the cleaner added. **Delete it once the row is checked**; the
+  CLI refuses to write output while any row still has it
 - `kind`: `aisle` | `counter` (service counters: PTISKI, Juustotiski) | `backroom` | `junk`
 - `temperature`: `ambient` | `chilled` | `frozen`
 - `label`: optional signage-style name for departments whose K-Ruoka name is internal
 
 The cleaner writes a **skeleton** for any department not in the file yet, prefilled by
-heuristic: `PAKASTE` → frozen; `MAITO`, `JUUSTO`, `KYLMÄ-*`, meat, fish and counters →
-chilled; everything else ambient and `aisle`. It also fails if a skeleton row is
-unreviewed. 192 rows is about an hour's work, and it's the hand review the checklist asks
-for. A new department after a re-scrape shows up here instead of slipping through.
+heuristic: `PAKASTE` → frozen; `MAITO`, `JUUSTO`, `KYLMÄ-*` and `Kylmähylly`, meat and
+counters → chilled; everything else ambient and `aisle`. A few staff-note departments are
+guessed as `backroom` or `junk`. Existing rows keep every decision a person made, and a
+department missing from a scrape stays in the table (reported as unused). 202 rows is
+about an hour's work, and it's the hand review the checklist asks for. A new department
+after a re-scrape shows up here instead of slipping through.
 
 ## 6. Code layout
 
 ```
 scraper/
-├── normalise.ts              CLI: read cache + curation, write data/normalised/
+├── normalise.ts              CLI: read and validate inputs, write data/normalised/
 └── normalise/
-    ├── load.ts               read and join queue + ndjson
-    ├── clean.ts              pure rules 1–10, no I/O
-    ├── categories.ts         tree, stable ids, temperature vote
-    ├── schema.ts             Zod schemas (later moved/shared with validate-data.ts)
+    ├── load.ts               parse and join queue + ndjson (rule 1)
+    ├── clean.ts              rules 2–7 and 10, no I/O
+    ├── compare.ts            locale-independent sort order (rule 12)
+    ├── categories.ts         tree, stable ids, temperature vote (rules 8–9)
+    ├── departments.ts        the curation table: guesses, reconcile, lookups (§5)
+    ├── records.ts            Product, Placement and departments.json records
+    ├── schema.ts             Zod schemas for output and curation files (rule 11)
     ├── report.ts             report.md
+    ├── fixtures.ts           shared test fixtures
     └── *.test.ts             Vitest, on small hand-written fixtures
 ```
 
@@ -161,12 +199,12 @@ scraper/
 
 ## 7. Steps
 
-1. `load.ts` + `clean.ts` with tests: join, EAN check, exclusions, text cleaning, shelf
-   ID, level.
-2. `categories.ts` with tests: tree from paths, append-only ids, temperature vote.
-3. Department skeleton generation. Fill the table by hand (pair session, ~1 h).
-4. `schema.ts`, `report.ts`, CLI. First full run, commit `data/normalised/`.
-5. Once produce is scraped (§2): re-run, fill the new department rows, commit again.
+1. Done: `load.ts` + `clean.ts` with tests: join, EAN check, exclusions, text cleaning,
+   shelf ID, level.
+2. Done: `categories.ts` with tests: tree from paths, append-only ids, temperature vote.
+3. Department skeleton generation (code done). Fill the table by hand (pair session, ~1 h).
+4. `schema.ts`, `report.ts`, CLI (code done). First full run, commit `data/normalised/`.
+5. Produce is scraped (§2, done). Re-run, fill the new department rows, commit again.
 6. Read `report.md` by hand. Tick "Full scrape reviewed" in §13.
 7. Cut 50 products across chilled, frozen and ambient from the output for `data/mock/`,
    if the contract sprint hasn't produced one yet.
