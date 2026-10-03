@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "export:kupittaa": "bun run export-kupittaa.ts",
+    "normalise": "bun run normalise.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
