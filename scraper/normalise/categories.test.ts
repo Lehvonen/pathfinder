@@ -3,12 +3,12 @@ import {
   ancestry,
   assignIds,
   buildCategories,
+  categoryPathOf,
   nameFromSlug,
-  UNCATEGORISED,
   winner,
   type Temperature,
 } from './categories';
-import type { CleanProduct } from './clean';
+import { cleanProduct } from './fixtures';
 
 const MILKS = 'maito-juusto-munat-ja-rasvat/maidot-ja-piimat/maidot';
 const ICE_CREAM = 'pakasteet/jaatelot/jaatelopuikot';
@@ -20,16 +20,35 @@ const temperatures = new Map<string, Temperature>([
   [FREEZER, 'frozen'],
 ]);
 
-function product(ean: string, categoryPath: string | null, departmentId: string): CleanProduct {
-  return {
-    ean,
-    name: ean,
-    categoryPath,
-    popularity: null,
-    departmentId,
-    shelfId: `${departmentId}:01`,
-  };
-}
+const product = (ean: string, categoryPath: string | null, departmentId: string) =>
+  cleanProduct(ean, { categoryPath, departmentId });
+
+/** Temperature of each category, keyed by name. */
+const byName = (categories: { name: string; temperature: Temperature }[]) =>
+  Object.fromEntries(categories.map((c) => [c.name, c.temperature]));
+
+describe('categoryPathOf', () => {
+  it.each([null, '', '/', ' / '])('treats %j as uncategorised', (path) => {
+    expect(categoryPathOf(product('1', path, DAIRY))).toBe('uncategorised');
+  });
+
+  it.each(['/a/b/', 'a//b', ' a / b '])('drops empty segments from %j', (path) => {
+    expect(categoryPathOf(product('1', path, DAIRY))).toBe('a/b');
+  });
+
+  it('gives those paths the same ids as the clean path', () => {
+    const { ids } = buildCategories({
+      products: [
+        product('1', '/a/b/', DAIRY),
+        product('2', 'a//b', DAIRY),
+        product('3', 'a/b', DAIRY),
+      ],
+      ids: {},
+      departmentTemperatures: temperatures,
+    });
+    expect(ids).toEqual({ a: 1, 'a/b': 2 });
+  });
+});
 
 describe('ancestry', () => {
   it('lists every level from the root down', () => {
@@ -129,7 +148,6 @@ describe('buildCategories', () => {
       departmentTemperatures: temperatures,
     });
     expect(categories).toEqual([{ id: 1, name: 'Uncategorised', temperature: 'chilled' }]);
-    expect(UNCATEGORISED).toBe('uncategorised');
   });
 
   it('treats a department without a temperature as no vote', () => {
@@ -161,5 +179,61 @@ describe('buildCategories', () => {
       'Jaatelopuikot',
       'Juomat',
     ]);
+  });
+
+  describe('overrides', () => {
+    const run = (products: ReturnType<typeof product>[], overrides: [string, Temperature][]) =>
+      buildCategories({
+        products,
+        ids: {},
+        departmentTemperatures: temperatures,
+        overrides: new Map(overrides),
+      });
+
+    it('lets the parents of an overridden leaf follow the override', () => {
+      const { categories } = run([product('1', ICE_CREAM, DAIRY)], [[ICE_CREAM, 'frozen']]);
+      expect(byName(categories)).toEqual({
+        Pakasteet: 'frozen',
+        Jaatelot: 'frozen',
+        Jaatelopuikot: 'frozen',
+      });
+    });
+
+    it("leaves the children's temperature alone when a parent is overridden", () => {
+      const { categories } = run(
+        [product('1', 'kauppa/maidot', DAIRY), product('2', 'kauppa/kahvit', 'unknown')],
+        [['kauppa', 'ambient']],
+      );
+      expect(byName(categories)).toEqual({
+        Kauppa: 'ambient',
+        Maidot: 'chilled',
+        Kahvit: 'ambient',
+      });
+    });
+
+    it("counts a nested override above it, not the ancestor's", () => {
+      const { mixed } = run(
+        [product('1', 'a/b/c', DAIRY), product('2', 'a/b/c', DAIRY), product('3', 'a/x', DAIRY)],
+        [
+          ['a/b/c', 'frozen'],
+          ['a/b', 'ambient'],
+        ],
+      );
+      // a/b is overridden, so not reported; above it, a counts the leaf's frozen votes
+      expect(mixed).toEqual([{ path: 'a', votes: { frozen: 2, chilled: 1, ambient: 0 } }]);
+    });
+
+    it('lets a product whose department has no temperature vote the override', () => {
+      const { categories } = run([product('1', 'a/b', 'unknown')], [['a/b', 'frozen']]);
+      expect(byName(categories)).toEqual({ A: 'frozen', B: 'frozen' });
+    });
+
+    it('reports mixed votes after the overrides, and not overridden categories', () => {
+      const { mixed } = run(
+        [product('1', 'kauppa/jaatelot', DAIRY), product('2', 'kauppa/maidot', DAIRY)],
+        [['kauppa/jaatelot', 'frozen']],
+      );
+      expect(mixed).toEqual([{ path: 'kauppa', votes: { frozen: 1, chilled: 1, ambient: 0 } }]);
+    });
   });
 });

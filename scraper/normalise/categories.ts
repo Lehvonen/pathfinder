@@ -8,6 +8,7 @@
  */
 import type { Category } from '@pathfinder/core';
 import type { CleanProduct } from './clean';
+import { compareStrings } from './compare';
 
 export type Temperature = Category['temperature'];
 
@@ -31,12 +32,15 @@ export interface CategoryInput {
 export interface CategoryResult {
   categories: Category[]; // in use, with their ancestors, sorted by id
   ids: CategoryIds; // the input registry plus any new paths
-  mixed: { path: string; votes: Record<Temperature, number> }[];
+  mixed: { path: string; votes: Record<Temperature, number> }[]; // not overridden ones
   unnamed: string[]; // paths named from their slug
 }
 
-export const categoryPathOf = (product: CleanProduct): string =>
-  product.categoryPath ?? UNCATEGORISED;
+/** The product's path without empty segments; uncategorised when nothing is left. */
+export function categoryPathOf(product: CleanProduct): string {
+  const segments = (product.categoryPath ?? '').split('/').map((s) => s.trim());
+  return segments.filter(Boolean).join('/') || UNCATEGORISED;
+}
 
 /** `a/b/c` → [`a`, `a/b`, `a/b/c`] */
 export function ancestry(path: string): string[] {
@@ -55,7 +59,7 @@ export function nameFromSlug(path: string): string {
 export function assignIds(registry: CategoryIds, paths: Iterable<string>): CategoryIds {
   const ids = { ...registry };
   let next = Math.max(0, ...Object.values(ids)) + 1;
-  for (const path of [...new Set(paths)].sort()) {
+  for (const path of [...new Set(paths)].sort(compareStrings)) {
     if (!(path in ids)) ids[path] = next++;
   }
   return ids;
@@ -77,11 +81,20 @@ export function winner(votes: Record<Temperature, number>): Temperature {
 export function buildCategories(input: CategoryInput): CategoryResult {
   const { products, departmentTemperatures, names, overrides } = input;
 
-  // Every product votes for its leaf and each ancestor, so a parent reflects all below it
+  // Every product votes for its leaf and each ancestor, so a parent reflects all below it.
+  // Overrides travel upward only: walking up from the leaf, the first (deepest) override
+  // becomes the product's vote from there on, so a parent follows an overridden leaf, but
+  // a parent's own override never changes the votes of the categories below it.
   const votes = new Map<string, Record<Temperature, number>>();
   for (const product of products) {
-    const temperature = departmentTemperatures.get(product.departmentId);
-    for (const path of ancestry(categoryPathOf(product))) {
+    let temperature = departmentTemperatures.get(product.departmentId);
+    let overridden = false;
+    for (const path of ancestry(categoryPathOf(product)).reverse()) {
+      const override = overrides?.get(path);
+      if (override && !overridden) {
+        temperature = override;
+        overridden = true;
+      }
       const v = votes.get(path) ?? emptyVotes();
       if (temperature) v[temperature]++;
       votes.set(path, v);
@@ -93,20 +106,23 @@ export function buildCategories(input: CategoryInput): CategoryResult {
   const mixed: CategoryResult['mixed'] = [];
   const unnamed: string[] = [];
   for (const [path, v] of votes) {
-    if (COLDEST_FIRST.filter((t) => v[t] > 0).length > 1) mixed.push({ path, votes: v });
+    const override = overrides?.get(path);
+    if (!override && COLDEST_FIRST.filter((t) => v[t] > 0).length > 1) {
+      mixed.push({ path, votes: v });
+    }
     const name = names?.get(path);
     if (!name) unnamed.push(path);
     const parent = ancestry(path).at(-2);
     categories.push({
       id: ids[path]!,
       name: name ?? nameFromSlug(path),
-      temperature: overrides?.get(path) ?? winner(v),
+      temperature: override ?? winner(v),
       ...(parent !== undefined && { parentId: ids[parent]! }),
     });
   }
 
   categories.sort((a, b) => a.id - b.id);
-  mixed.sort((a, b) => a.path.localeCompare(b.path));
-  unnamed.sort();
+  mixed.sort((a, b) => compareStrings(a.path, b.path));
+  unnamed.sort(compareStrings);
   return { categories, ids, mixed, unnamed };
 }
