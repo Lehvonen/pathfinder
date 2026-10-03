@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  categoryOf,
   categorySlugs,
   csvCell,
+  fiDecimal,
   formatUnitPrice,
+  parseLimit,
   parseRecords,
   popularityRanks,
+  pricing,
   toQueueItem,
   type QueueItem,
 } from './kupittaa-format';
@@ -150,5 +154,41 @@ describe('csvCell', () => {
     ['cr\rhere', '"cr\rhere"'],
   ])('quotes %j', (value, expected) => {
     expect(csvCell(value)).toBe(expected);
+  });
+});
+
+describe('fiDecimal', () => {
+  it('rounds to the given digits with a decimal comma', () => {
+    expect(fiDecimal(0.89, 2)).toBe('0,89');
+    expect(fiDecimal(22234.8, 1)).toBe('22234,8');
+    expect(fiDecimal(3, 2)).toBe('3,00');
+  });
+});
+
+describe('categoryOf and pricing', () => {
+  it('return the nested object, or an empty one when it is missing or not an object', () => {
+    expect(categoryOf(milk).path).toBe(milk.category.path);
+    expect(categoryOf({})).toEqual({});
+    expect(categoryOf({ category: 'x' })).toEqual({});
+    expect(pricing(milk)).toBe(milk.mobilescan.pricing);
+    expect(pricing({ mobilescan: {} })).toEqual({});
+    expect(pricing({})).toEqual({});
+  });
+});
+
+describe('parseLimit', () => {
+  it.each([undefined, ''])('treats %j as no limit', (value) => {
+    expect(parseLimit(value)).toBe(Infinity);
+  });
+
+  it.each([
+    ['0', 0],
+    ['20', 20],
+  ])('reads %j as %d', (value, expected) => {
+    expect(parseLimit(value)).toBe(expected);
+  });
+
+  it.each(['-1', '1.5', 'abc', '0x10', '1e3', ' 5 '])('refuses %j', (value) => {
+    expect(() => parseLimit(value)).toThrow('LIMIT must be a whole number');
   });
 });

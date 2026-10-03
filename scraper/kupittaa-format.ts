@@ -21,8 +21,31 @@ export const isObject = (v: unknown): v is Json => typeof v === 'object' && v !=
 export const str = (v: unknown): string | null => (typeof v === 'string' ? v : null);
 export const num = (v: unknown): number | null => (typeof v === 'number' ? v : null);
 
+/** Finnish decimal comma, or Finnish Excel reads 0.89 as text. */
+export const fiDecimal = (value: number, digits: number): string =>
+  value.toFixed(digits).replace('.', ',');
+
+export const categoryOf = (product: Json): Json =>
+  isObject(product.category) ? product.category : {};
+
+/** The product's mobilescan.pricing object: `normal` and, on offer, `batch`. */
+export const pricing = (product: Json): Json =>
+  isObject(product.mobilescan) && isObject(product.mobilescan.pricing)
+    ? product.mobilescan.pricing
+    : {};
+
+/**
+ * LIMIT for a trial run: unset or empty means no limit, `0` means fetch none. Anything but
+ * a plain non-negative integer is refused rather than guessed at.
+ */
+export function parseLimit(value: string | undefined): number {
+  if (value === undefined || value === '') return Infinity;
+  if (!/^\d+$/.test(value)) throw new Error(`LIMIT must be a whole number, got "${value}".`);
+  return Number(value);
+}
+
 export function categorySlugs(product: Json): string[] {
-  const category = isObject(product.category) ? product.category : {};
+  const category = categoryOf(product);
   const tree = Array.isArray(category.tree) ? category.tree : [];
   return tree.map((c) => (isObject(c) ? str(c.slug) : null)).filter((s) => s !== null);
 }
@@ -32,9 +55,8 @@ export function productName(p: Json): string | null {
 }
 
 export function normalPricing(p: Json): Json | null {
-  const pricing =
-    isObject(p.mobilescan) && isObject(p.mobilescan.pricing) ? p.mobilescan.pricing : {};
-  return isObject(pricing.normal) ? pricing.normal : null;
+  const normal = pricing(p).normal;
+  return isObject(normal) ? normal : null;
 }
 
 /** "0,89 €/l", the way the shelf label and the site show it. */
@@ -42,14 +64,14 @@ export function formatUnitPrice(normal: Json | null): string | null {
   const unitPrice = normal && isObject(normal.unitPrice) ? normal.unitPrice : null;
   const value = unitPrice ? num(unitPrice.value) : null;
   const unit = unitPrice ? str(unitPrice.unit) : null;
-  return value !== null && unit ? `${value.toFixed(2).replace('.', ',')} €/${unit}` : null;
+  return value !== null && unit ? `${fiDecimal(value, 2)} €/${unit}` : null;
 }
 
 export function toQueueItem(product: Json): QueueItem | null {
   const ean = str(product.ean);
   if (!ean) return null;
   const attributes = isObject(product.productAttributes) ? product.productAttributes : {};
-  const category = isObject(product.category) ? product.category : {};
+  const category = categoryOf(product);
   const normal = normalPricing(product);
   return {
     ean,

@@ -13,7 +13,8 @@
  * Usage (from the repo root):
  *   bun run scraper/export-kupittaa.ts            collect, then scrape, then csv
  *   bun run scraper/export-kupittaa.ts collect    phase 1: every product's EAN, name and
- *                                                 price from the listing (~450 requests)
+ *                                                 price from the listing (several hundred
+ *                                                 requests, ~25 min)
  *   bun run scraper/export-kupittaa.ts scrape     phase 2: each product's location, one
  *                                                 request per product
  *   bun run scraper/export-kupittaa.ts extra      list only the EXTRA_CATEGORIES, then csv
@@ -43,12 +44,16 @@ import {
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
+  categoryOf,
   categorySlugs,
   csvCell,
+  fiDecimal,
   isObject,
   normalPricing,
   num,
+  parseLimit,
   parseRecords,
+  pricing,
   popularityRanks,
   productName,
   str,
@@ -63,7 +68,6 @@ const PAGE_SIZE = 100;
 // collectListing treats as the end of that listing and then splits it into categories
 const MAX_WINDOW = 10_000;
 const DELAY_MS = Number(process.env.DELAY_MS) || 1500;
-const LIMIT = Number(process.env.LIMIT) || Infinity;
 const EXTRA_CATEGORIES = (process.env.EXTRA_CATEGORIES ?? '')
   .split(',')
   .map((path) => path.trim().replace(/^\/+|\/+$/g, ''))
@@ -294,20 +298,18 @@ async function collectExtra(session: Session, queue: Map<string, QueueItem>) {
   }
 }
 
-function trim(p: Json, item: QueueItem): Json {
-  const pricing =
-    isObject(p.mobilescan) && isObject(p.mobilescan.pricing) ? p.mobilescan.pricing : {};
+function toRecord(p: Json, item: QueueItem): Json {
   const normal = normalPricing(p);
-  const batch = isObject(pricing.batch) ? pricing.batch : null;
+  const batch = pricing(p).batch;
   const loc = isObject(p.location) ? p.location : null;
   const dept = loc && isObject(loc.department) ? loc.department : null;
   const name = productName(p) ?? item.name;
-  const category = isObject(p.category) ? p.category : {};
+  const category = categoryOf(p);
   return {
     ean: item.ean,
     name,
     brand: isObject(p.brand) ? str(p.brand.name) : null,
-    storeId: isObject(p.store) ? str(p.store.id) : null,
+    storeId: storeOf(p),
     isAvailable: p.isAvailable ?? null,
     popularity: num(p.popularity) ?? item.popularity,
     categoryPath: str(category.path) ?? item.categoryPath,
@@ -331,7 +333,7 @@ function trim(p: Json, item: QueueItem): Json {
     price: normal
       ? { price: num(normal.price), unit: str(normal.unit), unitPrice: normal.unitPrice ?? null }
       : null,
-    batchPrice: batch ? { price: num(batch.price), amount: num(batch.amount) } : null,
+    batchPrice: isObject(batch) ? { price: num(batch.price), amount: num(batch.amount) } : null,
     scrapedAt: new Date().toISOString(),
   };
 }
@@ -357,11 +359,17 @@ async function collect(session: Session) {
 }
 
 async function scrape(session: Session) {
+  let limit: number;
+  try {
+    limit = parseLimit(process.env.LIMIT);
+  } catch (err) {
+    throw new StopError((err as Error).message);
+  }
   const done = readDone();
   const todo = [...readQueue().values()]
     .filter((item) => !done.has(item.ean))
     .sort((a, b) => b.popularity - a.popularity)
-    .slice(0, LIMIT);
+    .slice(0, limit);
   console.log(
     `${todo.length} products to fetch, ~${Math.round((todo.length * DELAY_MS) / 60_000)} min`,
   );
@@ -390,7 +398,7 @@ async function scrape(session: Session) {
       ? { ean: item.ean, error: 'no product' }
       : storeId && storeId !== STORE_ID
         ? { ean: item.ean, error: 'other store', storeId }
-        : trim(product, item);
+        : toRecord(product, item);
     appendFileSync(PRODUCTS_FILE, JSON.stringify(record) + '\n');
 
     if ((i + 1) % 25 === 0) {
@@ -441,15 +449,14 @@ function writeCsv() {
       ean: item.ean,
       name: item.name ?? str(record?.name),
       brand: item.brand,
-      // Decimal comma, or Finnish Excel reads 0.89 as text
-      price: item.price?.toFixed(2).replace('.', ','),
+      price: item.price === null ? null : fiDecimal(item.price, 2),
       unit_price: item.unitPrice,
       department: dept?.name,
       shelf: loc?.shelf,
       level: loc?.level,
       zone: dept?.zone,
       department_order: dept?.orderNumber,
-      popularity: item.popularity.toFixed(1).replace('.', ','),
+      popularity: fiDecimal(item.popularity, 1),
       popularity_rank: ranks.get(item.ean),
     };
     return CSV_COLUMNS.map((column) => csvCell(row[column])).join(';');
