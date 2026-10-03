@@ -191,8 +191,12 @@ function toQueueItem(product: Json): QueueItem | null {
   };
 }
 
+const storeOf = (product: Json): string | null =>
+  isObject(product.store) ? str(product.store.id) : null;
+
+/** For the listing: a product from another store means the session is on the wrong store. */
 function checkStore(product: Json) {
-  const storeId = isObject(product.store) ? str(product.store.id) : null;
+  const storeId = storeOf(product);
   if (storeId && storeId !== STORE_ID) {
     throw new StopError(`Response is for store ${storeId}, expected ${STORE_ID}.`);
   }
@@ -433,8 +437,14 @@ async function scrape(session: Session) {
       `/kr-api/v4/products/${encodeURIComponent(item.slug ?? item.ean)}?${params}`,
     );
     const product = isObject(json.product) ? json.product : null;
-    if (product) checkStore(product);
-    const record = product ? trim(product, item) : { ean: item.ean, error: 'no product' };
+    // returnLocalProductsFromOtherStores can answer for another store. Record it and move on:
+    // stopping here would stop every rerun at the same product, since the order is fixed
+    const storeId = product ? storeOf(product) : null;
+    const record = !product
+      ? { ean: item.ean, error: 'no product' }
+      : storeId && storeId !== STORE_ID
+        ? { ean: item.ean, error: 'other store', storeId }
+        : trim(product, item);
     appendFileSync(PRODUCTS_FILE, JSON.stringify(record) + '\n');
 
     if ((i + 1) % 25 === 0) {
