@@ -1,5 +1,57 @@
-import { describe, expect, it } from 'vitest';
-import { validateNormalised, type NormalisedData } from './schema';
+import type { Category, Placement, Product } from '@pathfinder/core';
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import type { z } from 'zod';
+import type { CuratedDepartment } from './departments';
+import {
+  categoryIdsSchema,
+  categoryNamesSchema,
+  categoryOverridesSchema,
+  categorySchema,
+  curatedDepartmentsSchema,
+  placementSchema,
+  productSchema,
+  validateNormalised,
+  type NormalisedData,
+} from './schema';
+
+describe('schema types', () => {
+  // Checked by the typecheck: a change to types.ts or departments.ts that a schema does
+  // not follow, in either direction, fails to compile
+  it('equal the contract types they mirror', () => {
+    expectTypeOf<z.infer<typeof productSchema>>().toEqualTypeOf<Product>();
+    expectTypeOf<z.infer<typeof placementSchema>>().toEqualTypeOf<Placement>();
+    expectTypeOf<z.infer<typeof categorySchema>>().toEqualTypeOf<Category>();
+    expectTypeOf<z.infer<typeof curatedDepartmentsSchema>>().toEqualTypeOf<CuratedDepartment[]>();
+  });
+});
+
+describe('curation schemas', () => {
+  const row = { id: '91208', name: '(MAITO) Maidot', kind: 'aisle', temperature: 'chilled' };
+
+  it('accept valid department rows, reviewed or not', () => {
+    const rows = [row, { ...row, id: '600', label: 'Jäätelöt', reviewed: false }];
+    expect(curatedDepartmentsSchema.safeParse(rows).success).toBe(true);
+  });
+
+  it.each([
+    ['a typo in kind', { ...row, kind: 'junkk' }],
+    ['an unknown temperature', { ...row, temperature: 'warm' }],
+    ['reviewed: true', { ...row, reviewed: true }],
+    ['an unknown field', { ...row, kinds: 'aisle' }],
+    ['an empty id', { ...row, id: '' }],
+  ])('reject a department row with %s', (_, bad) => {
+    expect(curatedDepartmentsSchema.safeParse([bad]).success).toBe(false);
+  });
+
+  it('check overrides and names', () => {
+    expect(categoryOverridesSchema.safeParse({ 'a/b': 'frozen' }).success).toBe(true);
+    expect(categoryOverridesSchema.safeParse({ 'a/b': 'cold' }).success).toBe(false);
+    expect(categoryNamesSchema.safeParse({ a: 'Maidot' }).success).toBe(true);
+    expect(categoryNamesSchema.safeParse({ a: '' }).success).toBe(false);
+    expect(categoryIdsSchema.safeParse({ a: 1, 'a/b': 2 }).success).toBe(true);
+    expect(categoryIdsSchema.safeParse({ a: 0 }).success).toBe(false);
+  });
+});
 
 const MILK = '6410405082657';
 const BREAD = '6410405000001';
@@ -99,5 +151,13 @@ describe('validateNormalised', () => {
     expect(validateNormalised(data)).toEqual(
       expect.arrayContaining([expect.stringMatching(/^category #2: /)]),
     );
+  });
+
+  it('reports a broken product once, not again in the cross-checks', () => {
+    const data = valid();
+    data.products[1] = { ean: BREAD, name: '', categoryId: 99 };
+    expect(validateNormalised(data)).toEqual([
+      expect.stringMatching(/^product 6410405000001: name /),
+    ]);
   });
 });
