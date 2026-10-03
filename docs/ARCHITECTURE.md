@@ -164,7 +164,8 @@ Revisit only after submission, if the app is actually being used.
 ├── scraper/                 Bun + TypeScript workspace package; the `ruoka` session it uses lives outside, see §7
 │   ├── export-kupittaa.ts   whole-store export: products + in-store location → cache/
 │   ├── kupittaa-format.ts   pure helpers for the export, tested
-│   ├── normalise.ts         scrape → schema (planned)
+│   ├── normalise.ts         scrape → schema: the data cleaner CLI, see docs/plans/normalise.md
+│   ├── normalise/           its rules, category tree, department table, validation, report
 │   ├── diff.ts              compare scrapes, report moved/removed products (planned)
 │   ├── README.md            how to run the export
 │   ├── package.json, tsconfig.json
@@ -302,9 +303,15 @@ summarised in §17, but where the two differ, `types.ts` is authoritative.
    from `/kr-api/v4/products/<slug>?storeId=N119`, one request every 1.5 s, resumable,
    stopping on any block. Output in `scraper/cache/kupittaa/`: `queue.json` (every
    product with name, price and popularity, from the listing), `products.ndjson` (one
-   record per product with its location) and `kupittaa.csv` (both merged, for people).
+   record per product with its location), `category-names.json` (category path → Finnish
+   name, from the listing) and `kupittaa.csv` (both merged, for people).
 2. `normalise.ts` parses `queue.json` and `products.ndjson` into `products`,
-   `placements`, `categories`, deduplicating on EAN.
+   `placements`, `categories`, deduplicating on EAN. It also writes `departments.json`
+   (the reviewed department table with shelves and counts, for the map work),
+   `popularity.json`, the append-only `category-ids.json` and a `report.md` for the hand
+   review, into `data/normalised/`. Every input is validated first; nothing is written
+   while a department is unreviewed or the output fails validation
+   (`docs/plans/normalise.md`).
 3. Shelf IDs are matched against the shelves in `graph.json`, and each placement's
    access node is taken from the matched shelf. **Unmatched shelf IDs are logged as
    errors, not silently dropped** — this list is the handoff between the data work
@@ -691,7 +698,7 @@ Monday. This outranks every checkbox below.
 - [x] `ruoka` scraper working: name, price and in-store location (department, shelf, level) per product at Kupittaa, see §7
 - [ ] `ruoka` location patch given a home (fork or patch file) so the whole team can use MCP lookups — optional, the export does not need it
 - [x] Whole-store export (`scraper/export-kupittaa.ts`) written, output in `scraper/cache/kupittaa/` — first full run in progress
-- [ ] `normalise.ts` — raw → schema, EAN dedup, multi-placement handled, **no price, images or descriptions**
+- [ ] `normalise.ts` — raw → schema, EAN dedup, multi-placement handled, **no price, images or descriptions** _(code done; first reviewed run pending)_
 - [ ] Full scrape reviewed by hand for junk, duplicates, missing shelves
 - [ ] Shelf IDs matched against `graph.json`; unmatched logged as errors, never dropped _(ready when: a real graph exists at any fidelity)_
 - [ ] `diff.ts` — compare scrapes, report moved / new / removed

@@ -82,11 +82,12 @@ Progress is saved, so just rerun later.
 
 All in `scraper/cache/kupittaa/`:
 
-| File              | Contents                                                                                                                                                                                                                                                                                    |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `kupittaa.csv`    | One row per product: `ean;name;brand;price;unit_price;department;shelf;level;zone;department_order;popularity;popularity_rank`. Semicolons and decimal commas, so Excel with Finnish settings opens it in columns. Location columns are empty until the location phase reaches that product |
-| `queue.json`      | Every product from the listing: EAN, name, brand, price, unit price, URL slug, popularity, category                                                                                                                                                                                         |
-| `products.ndjson` | One JSON line per product whose location has been fetched, or an error record (counted as errors in `status`)                                                                                                                                                                               |
+| File                  | Contents                                                                                                                                                                                                                                                                                    |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kupittaa.csv`        | One row per product: `ean;name;brand;price;unit_price;department;shelf;level;zone;department_order;popularity;popularity_rank`. Semicolons and decimal commas, so Excel with Finnish settings opens it in columns. Location columns are empty until the location phase reaches that product |
+| `queue.json`          | Every product from the listing: EAN, name, brand, price, unit price, URL slug, popularity, category                                                                                                                                                                                         |
+| `category-names.json` | Category path → Finnish name, collected from the listing (`collect` and `extra`). The cleaner names categories with it                                                                                                                                                                      |
+| `products.ndjson`     | One JSON line per product whose location has been fetched, or an error record (counted as errors in `status`)                                                                                                                                                                               |
 
 Example `products.ndjson` line (shortened):
 

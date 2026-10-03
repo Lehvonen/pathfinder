@@ -5,12 +5,15 @@
   "type": "module",
   "scripts": {
     "export:kupittaa": "bun run export-kupittaa.ts",
+    "normalise": "bun run normalise.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "devDependencies": {
+    "@pathfinder/core": "workspace:*",
     "@types/bun": "^1.3.12",
     "typescript": "^6.0.3",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.2",
+    "zod": "^4.6.5"
   }
 }

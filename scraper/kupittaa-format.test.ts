@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  categoryNames,
   categoryOf,
   categorySlugs,
   csvCell,
@@ -84,6 +85,44 @@ describe('categorySlugs', () => {
     const product = { category: { tree: [{ slug: 'a' }, null, { name: 'x' }, { slug: 'a/b' }] } };
     expect(categorySlugs(product)).toEqual(['a', 'a/b']);
     expect(categorySlugs({})).toEqual([]);
+  });
+});
+
+describe('categoryNames', () => {
+  it("pairs each level's full path with its Finnish name", () => {
+    const product = {
+      category: {
+        tree: [
+          {
+            slug: 'maito-juusto-munat-ja-rasvat',
+            localizedName: { finnish: 'Maito, juusto, munat ja rasvat' },
+          },
+          {
+            slug: 'maito-juusto-munat-ja-rasvat/maidot-ja-piimat',
+            localizedName: { finnish: 'Maidot ja piimät' },
+          },
+        ],
+      },
+    };
+    expect(categoryNames(product)).toEqual([
+      ['maito-juusto-munat-ja-rasvat', 'Maito, juusto, munat ja rasvat'],
+      ['maito-juusto-munat-ja-rasvat/maidot-ja-piimat', 'Maidot ja piimät'],
+    ]);
+  });
+
+  it('skips levels without a slug or a Finnish name', () => {
+    const product = {
+      category: {
+        tree: [
+          { slug: 'a' },
+          { localizedName: { finnish: 'B' } },
+          null,
+          { slug: 'c', localizedName: 'C' },
+        ],
+      },
+    };
+    expect(categoryNames(product)).toEqual([]);
+    expect(categoryNames({})).toEqual([]);
   });
 });
 

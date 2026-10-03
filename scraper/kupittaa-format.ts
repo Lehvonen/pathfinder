@@ -44,10 +44,25 @@ export function parseLimit(value: string | undefined): number {
   return Number(value);
 }
 
+/** The category tree's levels, root first; non-object entries are dropped. */
+export function categoryTree(product: Json): Json[] {
+  const tree = categoryOf(product).tree;
+  return Array.isArray(tree) ? tree.filter(isObject) : [];
+}
+
 export function categorySlugs(product: Json): string[] {
-  const category = categoryOf(product);
-  const tree = Array.isArray(category.tree) ? category.tree : [];
-  return tree.map((c) => (isObject(c) ? str(c.slug) : null)).filter((s) => s !== null);
+  return categoryTree(product)
+    .map((c) => str(c.slug))
+    .filter((s) => s !== null);
+}
+
+/** [path, Finnish name] for each level that has both; tree slugs are full paths. */
+export function categoryNames(product: Json): [string, string][] {
+  return categoryTree(product).flatMap((c) => {
+    const slug = str(c.slug);
+    const name = isObject(c.localizedName) ? str(c.localizedName.finnish) : null;
+    return slug && name ? [[slug, name] as [string, string]] : [];
+  });
 }
 
 export function productName(p: Json): string | null {

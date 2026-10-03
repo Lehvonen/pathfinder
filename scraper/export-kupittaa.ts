@@ -30,6 +30,7 @@
  *
  * Output, in scraper/cache/kupittaa/ (gitignored):
  *   queue.json        every listed product: ean, name, brand, price, slug, category
+ *   category-names.json  category path → Finnish name, from the listing
  *   products.ndjson   one record per product with its location, appended as it goes
  *   kupittaa.csv      ean;name;brand;price;unit price;location;popularity, one row per product
  */
@@ -44,6 +45,7 @@ import {
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
+  categoryNames,
   categoryOf,
   categorySlugs,
   csvCell,
@@ -61,6 +63,7 @@ import {
   type Json,
   type QueueItem,
 } from './kupittaa-format';
+import { compareStrings } from './normalise/compare';
 
 const STORE_ID = 'N119';
 const PAGE_SIZE = 100;
@@ -80,6 +83,7 @@ const QUEUE_FILE = join(OUT_DIR, 'queue.json');
 const PRODUCTS_FILE = join(OUT_DIR, 'products.ndjson');
 const CSV_FILE = join(OUT_DIR, 'kupittaa.csv');
 const AGGREGATIONS_FILE = join(OUT_DIR, 'aggregations.json');
+const CATEGORY_NAMES_FILE = join(OUT_DIR, 'category-names.json');
 
 interface Session {
   getPage: () => Promise<{
@@ -191,6 +195,20 @@ function writeQueue(queue: Map<string, QueueItem>) {
   renameSync(`${QUEUE_FILE}.tmp`, QUEUE_FILE);
 }
 
+type CategoryNames = Record<string, string>;
+
+function readCategoryNames(): CategoryNames {
+  return existsSync(CATEGORY_NAMES_FILE)
+    ? JSON.parse(readFileSync(CATEGORY_NAMES_FILE, 'utf8'))
+    : {};
+}
+
+function writeCategoryNames(names: CategoryNames) {
+  const sorted = Object.fromEntries(Object.entries(names).sort(([a], [b]) => compareStrings(a, b)));
+  writeFileSync(`${CATEGORY_NAMES_FILE}.tmp`, JSON.stringify(sorted, null, 1));
+  renameSync(`${CATEGORY_NAMES_FILE}.tmp`, CATEGORY_NAMES_FILE);
+}
+
 /** Every record saved so far; see parseRecords for damaged lines. */
 function readRecords(): Json[] {
   if (!existsSync(PRODUCTS_FILE)) return [];
@@ -215,6 +233,7 @@ function readDone(): Set<string> {
 async function collectListing(
   session: Session,
   queue: Map<string, QueueItem>,
+  names: CategoryNames,
   categoryPath: string | null,
   depth: number,
 ): Promise<number> {
@@ -250,6 +269,7 @@ async function collectListing(
       checkStore(product);
       const child = categorySlugs(product)[depth];
       if (child) children.add(child);
+      for (const [path, name] of categoryNames(product)) names[path] = name;
       const item = toQueueItem(product);
       if (!item) continue;
       if (!queue.has(item.ean)) added++;
@@ -257,6 +277,7 @@ async function collectListing(
       queue.set(item.ean, item);
     }
     writeQueue(queue);
+    writeCategoryNames(names);
     offset += products.length;
     console.log(`${label} ${offset}/${total}: +${added} new, ${queue.size} queued`);
     await sleep(DELAY_MS);
@@ -276,7 +297,7 @@ async function collectListing(
     // Tree slugs are full paths already ("maito-juusto-munat-ja-rasvat/maidot-ja-piimat")
     let covered = 0;
     for (const child of children) {
-      covered += await collectListing(session, queue, child, depth + 1);
+      covered += await collectListing(session, queue, names, child, depth + 1);
     }
     // Subcategories are discovered from the products this listing returned before the
     // offset limit, so a small one with none among them is never seen
@@ -291,9 +312,10 @@ async function collectListing(
 }
 
 async function collectExtra(session: Session, queue: Map<string, QueueItem>) {
+  const names = readCategoryNames();
   for (const path of EXTRA_CATEGORIES) {
     const before = queue.size;
-    await collectListing(session, queue, path, path.split('/').length);
+    await collectListing(session, queue, names, path, path.split('/').length);
     console.log(`extra ${path}: +${queue.size - before} new products`);
   }
 }
@@ -341,7 +363,7 @@ function toRecord(p: Json, item: QueueItem): Json {
 async function collect(session: Session) {
   const queue = readQueue();
   console.log(`Collecting product list for ${STORE_ID}, ${queue.size} already queued`);
-  const total = await collectListing(session, queue, null, 0);
+  const total = await collectListing(session, queue, readCategoryNames(), null, 0);
   await collectExtra(session, queue);
   if (queue.size === 0) {
     throw new StopError(

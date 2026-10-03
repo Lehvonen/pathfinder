@@ -1,0 +1,110 @@
+/*
+ * The cleaning rules (docs/plans/normalise.md §4, rules 2–7 and 10). Pure: raw products in,
+ * clean products plus a reason for every product left out.
+ *
+ * The output carries the contract's Product and Placement fields, except categoryId,
+ * which categories.ts assigns later from categoryPath, plus what later steps need.
+ */
+import type { Placement, Product } from '@pathfinder/core';
+import { compareStrings } from './compare';
+import type { RawLocation, RawProduct } from './load';
+
+/** From the hand-maintained department table (plan §5). */
+export type DepartmentKind = 'aisle' | 'counter' | 'backroom' | 'junk';
+
+export type ExclusionReason =
+  'bad-ean' | 'no-name' | 'no-location' | 'unavailable' | 'junk-department' | 'backroom-department';
+
+export interface Exclusion {
+  ean: string;
+  reason: ExclusionReason;
+}
+
+/** Derived from the contract, so a change to types.ts is a compile error here. */
+export type CleanProduct = Omit<Product, 'categoryId'> &
+  Omit<Placement, 'ean' | 'isPrimary'> & {
+    categoryPath: string | null;
+    popularity: number | null; // 0 means unranked, not a tie (ARCHITECTURE.md §6)
+    departmentId: string;
+  };
+
+/** Shelf `00` means the store records the department but no shelf. */
+export const DEPARTMENT_WIDE_SHELF = '00';
+
+const EAN = /^(\d{8}|\d{12,14})$/;
+
+export const isValidEan = (ean: string): boolean => EAN.test(ean);
+
+/** Trims and collapses runs of whitespace; empty becomes undefined. */
+export function cleanText(text: string | null): string | undefined {
+  const cleaned = text?.replace(/\s+/g, ' ').trim();
+  return cleaned ? cleaned : undefined;
+}
+
+const shelfOrWide = (shelf: string | null): string => cleanText(shelf) ?? DEPARTMENT_WIDE_SHELF;
+
+/**
+ * `<departmentId>:<shelf>`. Shelf numbers repeat in every department, so the number alone
+ * is not an ID. A missing shelf counts as department-wide.
+ */
+export function shelfId(departmentId: string, shelf: string | null): string {
+  return `${departmentId}:${shelfOrWide(shelf)}`;
+}
+
+/** Level 0, a non-number, or any level on a department-wide shelf means unknown. */
+export function shelfLevel(shelf: string | null, level: string | null): number | undefined {
+  if (shelfOrWide(shelf) === DEPARTMENT_WIDE_SHELF) return undefined;
+  const n = Number(level);
+  return Number.isInteger(n) && n > 0 ? n : undefined;
+}
+
+/** Either why the product is left out, or the values the checks have proved present. */
+function checkProduct(
+  product: RawProduct,
+  departmentKinds: ReadonlyMap<string, DepartmentKind>,
+): { reason: ExclusionReason } | { name: string; departmentId: string; location: RawLocation } {
+  if (!isValidEan(product.ean)) return { reason: 'bad-ean' };
+  const name = cleanText(product.name);
+  if (!name) return { reason: 'no-name' };
+  const location = product.location;
+  const departmentId = location?.department?.id;
+  if (!location || !departmentId) return { reason: 'no-location' };
+  if (product.isAvailable === false) return { reason: 'unavailable' };
+  const kind = departmentKinds.get(departmentId);
+  if (kind === 'junk') return { reason: 'junk-department' };
+  if (kind === 'backroom') return { reason: 'backroom-department' };
+  return { name, departmentId, location };
+}
+
+/**
+ * Cleans every product, sorted by EAN. A department missing from `departmentKinds` is
+ * kept: the department table reports unreviewed rows itself.
+ */
+export function cleanProducts(
+  products: RawProduct[],
+  departmentKinds: ReadonlyMap<string, DepartmentKind>,
+): { products: CleanProduct[]; exclusions: Exclusion[] } {
+  const clean: CleanProduct[] = [];
+  const exclusions: Exclusion[] = [];
+  for (const product of [...products].sort((a, b) => compareStrings(a.ean, b.ean))) {
+    const checked = checkProduct(product, departmentKinds);
+    if ('reason' in checked) {
+      exclusions.push({ ean: product.ean, reason: checked.reason });
+      continue;
+    }
+    const { name, departmentId, location } = checked;
+    const brand = cleanText(product.brand);
+    const level = shelfLevel(location.shelf, location.level);
+    clean.push({
+      ean: product.ean,
+      name,
+      ...(brand && { brand }),
+      categoryPath: product.categoryPath,
+      popularity: product.popularity > 0 ? product.popularity : null,
+      departmentId,
+      shelfId: shelfId(departmentId, location.shelf),
+      ...(level !== undefined && { shelfLevel: level }),
+    });
+  }
+  return { products: clean, exclusions };
+}
