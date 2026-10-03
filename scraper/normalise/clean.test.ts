@@ -31,7 +31,7 @@ const milk: RawProduct = {
 
 const noKinds = new Map<string, DepartmentKind>();
 
-/** A copy of milk with another EAN and location overrides. */
+/** A copy of milk with another EAN and any fields overridden. */
 function product(ean: string, overrides: Partial<RawProduct> = {}): RawProduct {
   return { ...milk, ean, ...overrides };
 }
@@ -46,12 +46,17 @@ describe('isValidEan', () => {
     expect(isValidEan(ean)).toBe(true);
   });
 
-  it.each(['', '1234567', '1234567890', '641040508265X', '123456789012345'])(
-    'rejects "%s"',
-    (ean) => {
-      expect(isValidEan(ean)).toBe(false);
-    },
-  );
+  it.each([
+    '',
+    '1234567',
+    '123456789',
+    '1234567890',
+    '12345678901', // a UPC-A without its check digit, just below 12
+    '641040508265X',
+    '123456789012345',
+  ])('rejects "%s"', (ean) => {
+    expect(isValidEan(ean)).toBe(false);
+  });
 });
 
 describe('cleanText', () => {
@@ -94,6 +99,19 @@ describe('shelfLevel', () => {
 });
 
 describe('cleanProducts', () => {
+  it('returns nothing for no products', () => {
+    expect(cleanProducts([], noKinds)).toEqual({ products: [], exclusions: [] });
+  });
+
+  it('gives a department-only product the department-wide shelf and no level', () => {
+    const [clean] = cleanProducts(
+      [product('6410405000003', { location: { ...milk.location!, shelf: '00', level: '4' } })],
+      noKinds,
+    ).products;
+    expect(clean?.shelfId).toBe('91208:00');
+    expect(clean).not.toHaveProperty('shelfLevel');
+  });
+
   it('cleans a product into the intermediate shape', () => {
     expect(cleanProducts([milk], noKinds)).toEqual({
       products: [

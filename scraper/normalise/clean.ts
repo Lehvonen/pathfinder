@@ -5,7 +5,8 @@
  * The output is not yet the contract's Product: categoryId is assigned later from
  * categoryPath, by categories.ts.
  */
-import type { RawProduct } from './load';
+import { compareStrings } from './compare';
+import type { RawLocation, RawProduct } from './load';
 
 /** From the hand-maintained department table (plan §5). */
 export type DepartmentKind = 'aisle' | 'counter' | 'backroom' | 'junk';
@@ -42,34 +43,39 @@ export function cleanText(text: string | null): string | undefined {
   return cleaned ? cleaned : undefined;
 }
 
+const shelfOrWide = (shelf: string | null): string => cleanText(shelf) ?? DEPARTMENT_WIDE_SHELF;
+
 /**
  * `<departmentId>:<shelf>`. Shelf numbers repeat in every department, so the number alone
  * is not an ID. A missing shelf counts as department-wide.
  */
 export function shelfId(departmentId: string, shelf: string | null): string {
-  return `${departmentId}:${cleanText(shelf) ?? DEPARTMENT_WIDE_SHELF}`;
+  return `${departmentId}:${shelfOrWide(shelf)}`;
 }
 
 /** Level 0, a non-number, or any level on a department-wide shelf means unknown. */
 export function shelfLevel(shelf: string | null, level: string | null): number | undefined {
-  if ((cleanText(shelf) ?? DEPARTMENT_WIDE_SHELF) === DEPARTMENT_WIDE_SHELF) return undefined;
+  if (shelfOrWide(shelf) === DEPARTMENT_WIDE_SHELF) return undefined;
   const n = Number(level);
   return Number.isInteger(n) && n > 0 ? n : undefined;
 }
 
-function exclusionReason(
+/** Either why the product is left out, or the values the checks have proved present. */
+function checkProduct(
   product: RawProduct,
   departmentKinds: ReadonlyMap<string, DepartmentKind>,
-): ExclusionReason | null {
-  if (!isValidEan(product.ean)) return 'bad-ean';
-  if (!cleanText(product.name)) return 'no-name';
-  const departmentId = product.location?.department?.id;
-  if (!departmentId) return 'no-location';
-  if (product.isAvailable === false) return 'unavailable';
+): { reason: ExclusionReason } | { name: string; departmentId: string; location: RawLocation } {
+  if (!isValidEan(product.ean)) return { reason: 'bad-ean' };
+  const name = cleanText(product.name);
+  if (!name) return { reason: 'no-name' };
+  const location = product.location;
+  const departmentId = location?.department?.id;
+  if (!location || !departmentId) return { reason: 'no-location' };
+  if (product.isAvailable === false) return { reason: 'unavailable' };
   const kind = departmentKinds.get(departmentId);
-  if (kind === 'junk') return 'junk-department';
-  if (kind === 'backroom') return 'backroom-department';
-  return null;
+  if (kind === 'junk') return { reason: 'junk-department' };
+  if (kind === 'backroom') return { reason: 'backroom-department' };
+  return { name, departmentId, location };
 }
 
 /**
@@ -82,20 +88,18 @@ export function cleanProducts(
 ): { products: CleanProduct[]; exclusions: Exclusion[] } {
   const clean: CleanProduct[] = [];
   const exclusions: Exclusion[] = [];
-  for (const product of [...products].sort((a, b) => a.ean.localeCompare(b.ean))) {
-    const reason = exclusionReason(product, departmentKinds);
-    if (reason) {
-      exclusions.push({ ean: product.ean, reason });
+  for (const product of [...products].sort((a, b) => compareStrings(a.ean, b.ean))) {
+    const checked = checkProduct(product, departmentKinds);
+    if ('reason' in checked) {
+      exclusions.push({ ean: product.ean, reason: checked.reason });
       continue;
     }
-    // exclusionReason has checked both
-    const location = product.location!;
-    const departmentId = location.department!.id!;
+    const { name, departmentId, location } = checked;
     const brand = cleanText(product.brand);
     const level = shelfLevel(location.shelf, location.level);
     clean.push({
       ean: product.ean,
-      name: cleanText(product.name)!,
+      name,
       ...(brand && { brand }),
       categoryPath: product.categoryPath,
       popularity: product.popularity > 0 ? product.popularity : null,
