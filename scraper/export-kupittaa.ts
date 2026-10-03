@@ -42,6 +42,20 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import {
+  categorySlugs,
+  csvCell,
+  isObject,
+  normalPricing,
+  num,
+  parseRecords,
+  popularityRanks,
+  productName,
+  str,
+  toQueueItem,
+  type Json,
+  type QueueItem,
+} from './kupittaa-format';
 
 const STORE_ID = 'N119';
 const PAGE_SIZE = 100;
@@ -63,19 +77,6 @@ const PRODUCTS_FILE = join(OUT_DIR, 'products.ndjson');
 const CSV_FILE = join(OUT_DIR, 'kupittaa.csv');
 const AGGREGATIONS_FILE = join(OUT_DIR, 'aggregations.json');
 
-type Json = Record<string, unknown>;
-
-interface QueueItem {
-  ean: string;
-  name: string | null;
-  brand: string | null;
-  price: number | null;
-  unitPrice: string | null;
-  slug: string | null;
-  popularity: number;
-  categoryPath: string | null;
-}
-
 interface Session {
   getPage: () => Promise<{
     evaluate: <R, A>(fn: (arg: A) => Promise<R>, arg: A) => Promise<R>;
@@ -95,9 +96,6 @@ class HttpError extends StopError {
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-const isObject = (v: unknown): v is Json => typeof v === 'object' && v !== null;
-const str = (v: unknown): string | null => (typeof v === 'string' ? v : null);
-const num = (v: unknown): number | null => (typeof v === 'number' ? v : null);
 
 async function loadSession(): Promise<Session> {
   const file = join(MCP_DIR, 'src', 'browser', 'session.ts');
@@ -149,48 +147,6 @@ function listPath(categoryPath: string | null, offset: number): string {
   return `/kr-api/v2/product-search/?${params}`;
 }
 
-function categorySlugs(product: Json): string[] {
-  const category = isObject(product.category) ? product.category : {};
-  const tree = Array.isArray(category.tree) ? category.tree : [];
-  return tree.map((c) => (isObject(c) ? str(c.slug) : null)).filter((s) => s !== null);
-}
-
-function productName(p: Json): string | null {
-  return isObject(p.localizedName) ? str(p.localizedName.finnish) : str(p.localizedName);
-}
-
-function normalPricing(p: Json): Json | null {
-  const pricing =
-    isObject(p.mobilescan) && isObject(p.mobilescan.pricing) ? p.mobilescan.pricing : {};
-  return isObject(pricing.normal) ? pricing.normal : null;
-}
-
-/** "0,89 €/l", the way the shelf label and the site show it. */
-function formatUnitPrice(normal: Json | null): string | null {
-  const unitPrice = normal && isObject(normal.unitPrice) ? normal.unitPrice : null;
-  const value = unitPrice ? num(unitPrice.value) : null;
-  const unit = unitPrice ? str(unitPrice.unit) : null;
-  return value !== null && unit ? `${value.toFixed(2).replace('.', ',')} €/${unit}` : null;
-}
-
-function toQueueItem(product: Json): QueueItem | null {
-  const ean = str(product.ean);
-  if (!ean) return null;
-  const attributes = isObject(product.productAttributes) ? product.productAttributes : {};
-  const category = isObject(product.category) ? product.category : {};
-  const normal = normalPricing(product);
-  return {
-    ean,
-    name: productName(product),
-    brand: isObject(product.brand) ? str(product.brand.name) : null,
-    price: normal ? num(normal.price) : null,
-    unitPrice: formatUnitPrice(normal),
-    slug: str(attributes.urlSlug),
-    popularity: num(product.popularity) ?? 0,
-    categoryPath: str(category.path),
-  };
-}
-
 const storeOf = (product: Json): string | null =>
   isObject(product.store) ? str(product.store.id) : null;
 
@@ -231,21 +187,11 @@ function writeQueue(queue: Map<string, QueueItem>) {
   renameSync(`${QUEUE_FILE}.tmp`, QUEUE_FILE);
 }
 
-/**
- * Every record saved so far. A run killed mid-write can leave a half-written last line;
- * it is skipped, so that product is simply fetched again.
- */
+/** Every record saved so far; see parseRecords for damaged lines. */
 function readRecords(): Json[] {
   if (!existsSync(PRODUCTS_FILE)) return [];
-  const records: Json[] = [];
-  for (const line of readFileSync(PRODUCTS_FILE, 'utf8').split('\n')) {
-    try {
-      const record: unknown = JSON.parse(line);
-      if (isObject(record)) records.push(record);
-    } catch {
-      if (line.trim()) console.warn('Skipping a damaged line in products.ndjson');
-    }
-  }
+  const { records, damaged } = parseRecords(readFileSync(PRODUCTS_FILE, 'utf8'));
+  if (damaged > 0) console.warn(`Skipping ${damaged} damaged line(s) in products.ndjson`);
   return records;
 }
 
@@ -472,31 +418,6 @@ const CSV_COLUMNS = [
   'popularity',
   'popularity_rank',
 ] as const;
-
-/**
- * 1 = most popular. Ties share a rank and the next rank skips (1, 2, 2, 4), so products
- * K-Ruoka scores 0 all share the last rank. Uses the listing's score, which every product
- * has, so all ranks come from the same source.
- */
-function popularityRanks(items: QueueItem[]): Map<string, number> {
-  const sorted = [...items].sort((a, b) => b.popularity - a.popularity);
-  const ranks = new Map<string, number>();
-  sorted.forEach((item, i) => {
-    const previous = sorted[i - 1];
-    const rank =
-      previous && previous.popularity === item.popularity
-        ? (ranks.get(previous.ean) ?? i + 1)
-        : i + 1;
-    ranks.set(item.ean, rank);
-  });
-  return ranks;
-}
-
-function csvCell(value: unknown): string {
-  if (value === null || value === undefined) return '';
-  const text = String(value);
-  return /[";\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-}
 
 /**
  * One row per listed product. Location columns stay empty for products phase 2 has not
