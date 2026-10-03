@@ -164,14 +164,17 @@ Also check the usual things, weighted by real impact:
 - **Accessibility** on UI changes: missing labels, clickable non-buttons, colour-only
   state.
 
-### Python scraper (`scraper/`)
+### Scraper (`scraper/`, Bun + TypeScript)
 
 Rules A and C apply. Rule B doesn't. Also check the scraping rules in
 `docs/ARCHITECTURE.md` §7:
 
-- Requests are rate-limited, and raw responses are cached to `scraper/cache/`.
-  Development must never re-hit the site.
-- Only fields the app reads are kept. **No price, images or descriptions.**
+- Requests are rate-limited, and fetched data is cached as trimmed records in
+  `scraper/cache/` (§7, §17). Development must never re-hit the site for data already
+  cached.
+- Only fields the pipeline uses are kept in `scraper/cache/`, plus price for the CSV;
+  only fields the app reads reach `data/`. **No images or descriptions anywhere. Price
+  is allowed in `scraper/cache/` and `kupittaa.csv` only, never in `data/` (§17).**
 - Products are deduplicated on EAN.
 - Unmatched shelf IDs are logged as errors, never silently dropped.
 - Nothing adds K-Citymarket branding to anything user-facing.
