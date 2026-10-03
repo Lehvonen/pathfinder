@@ -68,7 +68,8 @@ top-level category menu with the 26 in §1 to catch any other category missing t
 - `data/curation/departments.json`: hand-maintained, see §5; new departments are added to
   it as unreviewed rows
 - `data/curation/categories.json`: optional, `categoryPath → temperature` overrides
-- `data/curation/category-names.json`: optional, `categoryPath → display name`
+- `scraper/cache/kupittaa/category-names.json`: `categoryPath → Finnish name`, written by
+  the exporter's listing (`collect`); categories missing from it are named from their slug
 - `data/normalised/category-ids.json`: the id registry from the previous run, read back
 
 Every input is checked against a Zod schema before anything is written; a malformed file

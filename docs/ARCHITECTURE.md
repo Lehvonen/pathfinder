@@ -303,7 +303,8 @@ summarised in §17, but where the two differ, `types.ts` is authoritative.
    from `/kr-api/v4/products/<slug>?storeId=N119`, one request every 1.5 s, resumable,
    stopping on any block. Output in `scraper/cache/kupittaa/`: `queue.json` (every
    product with name, price and popularity, from the listing), `products.ndjson` (one
-   record per product with its location) and `kupittaa.csv` (both merged, for people).
+   record per product with its location), `category-names.json` (category path → Finnish
+   name, from the listing) and `kupittaa.csv` (both merged, for people).
 2. `normalise.ts` parses `queue.json` and `products.ndjson` into `products`,
    `placements`, `categories`, deduplicating on EAN. It also writes `departments.json`
    (the reviewed department table with shelves and counts, for the map work),
