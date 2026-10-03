@@ -1,17 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { CleanProduct } from './clean';
+import { cleanProduct } from './fixtures';
 import { LIST_LIMIT, renderReport, sample, type ReportInput } from './report';
 
-function product(ean: string, shelfId: string): CleanProduct {
-  return {
-    ean,
-    name: ean,
-    categoryPath: null,
-    popularity: null,
-    departmentId: shelfId.split(':')[0]!,
-    shelfId,
-  };
-}
+/** A clean product on the given shelf, in that shelf's department. */
+const product = (ean: string, shelfId: string) =>
+  cleanProduct(ean, { departmentId: shelfId.slice(0, shelfId.indexOf(':')), shelfId });
 
 function input(overrides: Partial<ReportInput> = {}): ReportInput {
   return {
@@ -40,11 +33,24 @@ function input(overrides: Partial<ReportInput> = {}): ReportInput {
   };
 }
 
+const items = (n: number) => Array.from({ length: n }, (_, i) => `item ${i}`);
+
 describe('sample', () => {
-  it('lists short lists in full and summarises long ones', () => {
+  it('lists a short list in full', () => {
     expect(sample(['a', 'b'])).toBe('a, b');
+  });
+
+  it('summarises a long list as a count', () => {
     expect(sample(['a', 'b', 'c'], 2)).toBe('a, b … and 1 more');
+  });
+
+  it('is empty for an empty list', () => {
     expect(sample([])).toBe('');
+  });
+
+  it('lists exactly LIST_LIMIT items in full, with no "and 0 more"', () => {
+    expect(sample(items(LIST_LIMIT))).not.toContain('more');
+    expect(sample(items(LIST_LIMIT + 1))).toMatch(/ … and 1 more$/);
   });
 });
 
@@ -60,6 +66,13 @@ describe('renderReport', () => {
 
   it('is the same for the same input', () => {
     expect(renderReport(input())).toBe(renderReport(input()));
+  });
+
+  it('lists exactly LIST_LIMIT validation errors in full', () => {
+    const errors = Array.from({ length: LIST_LIMIT }, (_, i) => `product ${i}: broken`);
+    const report = renderReport(input({ validationErrors: errors }));
+    expect(report).toContain(`- product ${LIST_LIMIT - 1}: broken`);
+    expect(report).not.toContain('more');
   });
 
   it('lists validation errors, capped', () => {

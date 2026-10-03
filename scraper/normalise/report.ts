@@ -4,9 +4,11 @@
  * the scrape date is passed in, so the same input always renders the same report.
  */
 import type { CategoryResult } from './categories';
-import { DEPARTMENT_WIDE_SHELF, type CleanProduct, type Exclusion } from './clean';
+import type { CleanProduct, Exclusion } from './clean';
+import { compareStrings } from './compare';
 import type { Reconciled } from './departments';
 import type { LoadIssue } from './load';
+import { departmentStats } from './records';
 
 export interface ReportInput {
   scrapedAt: string;
@@ -40,7 +42,9 @@ export function sample(items: string[], limit = LIST_LIMIT): string {
 function byReason<R extends string>(items: { ean: string | null; reason: R }[]): Map<R, string[]> {
   const groups = new Map<R, string[]>();
   for (const item of items) {
-    groups.set(item.reason, [...(groups.get(item.reason) ?? []), item.ean ?? '(unreadable)']);
+    const eans = groups.get(item.reason) ?? [];
+    eans.push(item.ean ?? '(unreadable)');
+    groups.set(item.reason, eans);
   }
   return groups;
 }
@@ -57,15 +61,8 @@ export function renderReport(input: ReportInput): string {
   const describe = (ids: string[]) =>
     sample(ids.map((id) => `${id} ${names.get(id) ?? ''}`.trim()));
 
-  const perDepartment = new Map<string, { products: number; wide: number }>();
-  for (const product of products) {
-    const stats = perDepartment.get(product.departmentId) ?? { products: 0, wide: 0 };
-    stats.products++;
-    if (product.shelfId.endsWith(`:${DEPARTMENT_WIDE_SHELF}`)) stats.wide++;
-    perDepartment.set(product.departmentId, stats);
-  }
-  const departmentRows = [...perDepartment]
-    .sort((a, b) => b[1].products - a[1].products || a[0].localeCompare(b[0]))
+  const departmentRows = [...departmentStats(products)]
+    .sort((a, b) => b[1].products - a[1].products || compareStrings(a[0], b[0]))
     .map(([id, s]) => [
       id,
       names.get(id) ?? '',
