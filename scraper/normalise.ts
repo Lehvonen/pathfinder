@@ -14,32 +14,48 @@
  *   data/normalised/category-ids.json                    append-only id registry
  *
  * Writes data/normalised/: products.json, placements.json, categories.json,
- * category-ids.json, popularity.json, departments.json and report.md. While any department
- * is unreviewed or validation fails, only report.md (and the department table) is written
- * and the run exits with an error.
+ * category-ids.json, popularity.json, departments.json and report.md. Every input is
+ * checked before anything is written. While any department is unreviewed or validation
+ * fails, only report.md (and the department table) is written and the run exits with an
+ * error.
  */
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import type { Placement, Product } from '@pathfinder/core';
-import { buildCategories, categoryPathOf, type CategoryIds } from './normalise/categories';
+import { join, relative } from 'node:path';
+import { z } from 'zod';
+import { buildCategories } from './normalise/categories';
 import { cleanProducts } from './normalise/clean';
-import {
-  departmentLookups,
-  departmentsSeen,
-  reconcile,
-  type CuratedDepartment,
-} from './normalise/departments';
+import { departmentLookups, departmentsSeen, reconcile } from './normalise/departments';
 import { joinScrape, parseProducts, parseQueue } from './normalise/load';
+import { departmentStats, departmentSummary, toContract } from './normalise/records';
 import { renderReport } from './normalise/report';
-import { validateNormalised } from './normalise/schema';
+import {
+  categoryIdsSchema,
+  categoryNamesSchema,
+  categoryOverridesSchema,
+  curatedDepartmentsSchema,
+  validateNormalised,
+} from './normalise/schema';
 
 const ROOT = join(import.meta.dirname, '..');
 const CACHE_DIR = join(import.meta.dirname, 'cache', 'kupittaa');
 const CURATION_DIR = join(ROOT, 'data', 'curation');
 const OUT_DIR = join(ROOT, 'data', 'normalised');
 
-function readJson<T>(file: string, fallback: T): T {
-  return existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as T) : fallback;
+/** A JSON input checked against its schema; a missing file gives the fallback. */
+function readJson<T>(file: string, schema: z.ZodType<T>, fallback: T): T {
+  if (!existsSync(file)) return fallback;
+  const name = relative(ROOT, file);
+  let json: unknown;
+  try {
+    json = JSON.parse(readFileSync(file, 'utf8'));
+  } catch (err) {
+    fail(`${name} is not valid JSON: ${(err as Error).message}`);
+  }
+  const result = schema.safeParse(json);
+  if (!result.success)
+    fail(`${name} is not valid:
+${z.prettifyError(result.error)}`);
+  return result.data;
 }
 
 /** One record per line, so git diffs and diff.ts show changes product by product. */
@@ -66,42 +82,38 @@ const productsFile = join(CACHE_DIR, 'products.ndjson');
 if (!existsSync(queueFile) || !existsSync(productsFile)) {
   fail(`No scrape in ${CACHE_DIR}. Run scraper/export-kupittaa.ts first.`);
 }
-const scrapedAt = statSync(productsFile).mtime.toISOString().slice(0, 10);
+// The local date, so a scrape finishing just after midnight is not dated the day before
+const scrapedAt = statSync(productsFile).mtime.toLocaleDateString('sv-SE');
 
 const queue = parseQueue(readFileSync(queueFile, 'utf8'));
 const parsed = parseProducts(readFileSync(productsFile, 'utf8'));
 const joined = joinScrape(queue, parsed.records);
 
-// Departments first: every later step depends on the reviewed table
-mkdirSync(CURATION_DIR, { recursive: true });
+// Every input is read and checked before anything is written
 const departmentsFile = join(CURATION_DIR, 'departments.json');
+const categoryIdsFile = join(OUT_DIR, 'category-ids.json');
+const table = readJson(departmentsFile, curatedDepartmentsSchema, []);
+const ids = readJson(categoryIdsFile, categoryIdsSchema, {});
+const names = readJson(join(CURATION_DIR, 'category-names.json'), categoryNamesSchema, {});
+const overrides = readJson(join(CURATION_DIR, 'categories.json'), categoryOverridesSchema, {});
+
+// Departments first: every later step depends on the reviewed table
 const seen = departmentsSeen(joined.products);
-const departments = reconcile(readJson<CuratedDepartment[]>(departmentsFile, []), seen);
+const departments = reconcile(table, seen);
+mkdirSync(CURATION_DIR, { recursive: true });
 writeRecords(departmentsFile, departments.table);
 const lookups = departmentLookups(departments.table);
 
 const cleaned = cleanProducts(joined.products, lookups.kinds);
-const categoryIdsFile = join(OUT_DIR, 'category-ids.json');
 const categories = buildCategories({
   products: cleaned.products,
-  ids: readJson<CategoryIds>(categoryIdsFile, {}),
+  ids,
   departmentTemperatures: lookups.temperatures,
-  names: new Map(Object.entries(readJson(join(CURATION_DIR, 'category-names.json'), {}))),
-  overrides: new Map(Object.entries(readJson(join(CURATION_DIR, 'categories.json'), {}))),
+  names: new Map(Object.entries(names)),
+  overrides: new Map(Object.entries(overrides)),
 });
 
-const products: Product[] = cleaned.products.map((p) => ({
-  ean: p.ean,
-  name: p.name,
-  ...(p.brand && { brand: p.brand }),
-  categoryId: categories.ids[categoryPathOf(p)]!,
-}));
-const placements: Placement[] = cleaned.products.map((p) => ({
-  ean: p.ean,
-  shelfId: p.shelfId,
-  ...(p.shelfLevel !== undefined && { shelfLevel: p.shelfLevel }),
-  isPrimary: true,
-}));
+const { products, placements } = toContract(cleaned.products, categories.ids);
 const validationErrors = validateNormalised({
   products,
   placements,
@@ -134,15 +146,6 @@ if (validationErrors.length > 0) {
   fail(`Validation failed with ${validationErrors.length} errors; see data/normalised/report.md.`);
 }
 
-// Map output: the department table plus what the scrape says about each department
-const stats = new Map<string, { products: number; shelves: Set<string> }>();
-for (const p of cleaned.products) {
-  const s = stats.get(p.departmentId) ?? { products: 0, shelves: new Set<string>() };
-  s.products++;
-  s.shelves.add(p.shelfId);
-  stats.set(p.departmentId, s);
-}
-
 writeRecords(join(OUT_DIR, 'products.json'), products);
 writeRecords(join(OUT_DIR, 'placements.json'), placements);
 writeRecords(join(OUT_DIR, 'categories.json'), categories.categories);
@@ -151,17 +154,10 @@ writeMap(
   join(OUT_DIR, 'popularity.json'),
   Object.fromEntries(cleaned.products.map((p) => [p.ean, p.popularity])),
 );
+// For the map work: the department table plus what the scrape says about each department
 writeRecords(
   join(OUT_DIR, 'departments.json'),
-  departments.table
-    .filter((row) => seen.has(row.id))
-    .map((row) => ({
-      ...row,
-      orderNumber: seen.get(row.id)?.orderNumber ?? null,
-      zone: seen.get(row.id)?.zone ?? null,
-      products: stats.get(row.id)?.products ?? 0,
-      shelves: [...(stats.get(row.id)?.shelves ?? [])].sort(),
-    })),
+  departmentSummary(departments.table, seen, departmentStats(cleaned.products)),
 );
 
 console.log(
