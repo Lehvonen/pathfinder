@@ -6,36 +6,25 @@ import {
   reconcile,
   type CuratedDepartment,
 } from './departments';
-import type { RawDepartment, RawProduct } from './load';
+import { department, locatedIn, MILK_DEPARTMENT_ID, milkDepartment, product } from './fixtures';
+import type { RawDepartment } from './load';
 
-function department(id: string, name: string, zone = 'KERÄILY'): RawDepartment {
-  return { id, name, orderNumber: 1, zone, isPublic: true };
-}
+/** A product located in the given department, or in none. */
+const located = (ean: string, dept: RawDepartment | null) =>
+  product(ean, { location: locatedIn(dept) });
 
-function product(ean: string, dept: RawDepartment | null): RawProduct {
-  return {
-    ean,
-    name: ean,
-    brand: null,
-    categoryPath: null,
-    popularity: 0,
-    isAvailable: true,
-    location: { shelf: '01', level: '1', department: dept },
-  };
-}
-
-const milk = department('91208', '(MAITO) Maidot ja piimät - KORVAA ITSE');
+const dairy = milkDepartment;
 const coffee = department('536', '(TEOLLINEN 12) Kahvit');
 
 describe('departmentsSeen', () => {
   it('collects each department once, skipping products without one', () => {
     const seen = departmentsSeen([
-      product('1', milk),
-      product('2', milk),
-      product('3', coffee),
-      product('4', null),
-      { ...product('5', null), location: null },
-      product('6', { ...coffee, id: null }),
+      located('1', dairy),
+      located('2', dairy),
+      located('3', coffee),
+      located('4', null),
+      product('5', { location: null }),
+      located('6', { ...coffee, id: null }),
     ]);
     expect([...seen.keys()]).toEqual(['91208', '536']);
   });
@@ -55,7 +44,7 @@ describe('guessDepartment', () => {
     ['Keräys- ja toimituskoodit', '', 'junk', 'ambient'],
     ['Kaupan sisääntulot', 'KT Tarraton', 'aisle', 'ambient'],
   ])('guesses %s (%s) as %s, %s', (name, zone, kind, temperature) => {
-    expect(guessDepartment(department('1', name, zone))).toEqual({
+    expect(guessDepartment('1', department('1', name, zone))).toEqual({
       id: '1',
       name,
       kind,
@@ -64,8 +53,12 @@ describe('guessDepartment', () => {
     });
   });
 
+  it('takes the id from the argument, not from the scraped department', () => {
+    expect(guessDepartment('536', { ...coffee, id: null }).id).toBe('536');
+  });
+
   it('copes with a department missing its name and zone', () => {
-    const guess = guessDepartment({ ...department('1', ''), name: null, zone: null });
+    const guess = guessDepartment('1', { ...department('1', ''), name: null, zone: null });
     expect(guess).toMatchObject({ name: '', kind: 'aisle', temperature: 'ambient' });
   });
 });
@@ -81,34 +74,45 @@ describe('reconcile', () => {
 
   it('keeps human decisions and refreshes only the name', () => {
     const edited = { ...reviewedMilk, temperature: 'ambient' as const };
-    const { table, added, unreviewed } = reconcile([edited], new Map([[milk.id!, milk]]));
-    expect(table).toEqual([{ ...edited, name: milk.name }]);
+    const { table, added, unreviewed } = reconcile(
+      [edited],
+      new Map([[MILK_DEPARTMENT_ID, dairy]]),
+    );
+    expect(table).toEqual([{ ...edited, name: dairy.name }]);
     expect(added).toEqual([]);
     expect(unreviewed).toEqual([]);
+  });
+
+  it('keeps the old name when the scrape has none', () => {
+    const { table } = reconcile(
+      [reviewedMilk],
+      new Map([[MILK_DEPARTMENT_ID, { ...dairy, name: null }]]),
+    );
+    expect(table[0]?.name).toBe('old name');
   });
 
   it('adds a guessed, unreviewed row for a new department', () => {
     const { table, added, unreviewed } = reconcile(
       [reviewedMilk],
       new Map([
-        [milk.id!, milk],
-        [coffee.id!, coffee],
+        [MILK_DEPARTMENT_ID, dairy],
+        ['536', coffee],
       ]),
     );
     expect(added).toEqual(['536']);
     expect(unreviewed).toEqual(['536']);
-    expect(table.find((row) => row.id === '536')).toEqual(guessDepartment(coffee));
+    expect(table.find((row) => row.id === '536')).toEqual(guessDepartment('536', coffee));
   });
 
   it('reports rows still unreviewed from an earlier run', () => {
-    const pending = guessDepartment(coffee);
-    const { added, unreviewed } = reconcile([pending], new Map([[coffee.id!, coffee]]));
+    const pending = guessDepartment('536', coffee);
+    const { added, unreviewed } = reconcile([pending], new Map([['536', coffee]]));
     expect(added).toEqual([]);
     expect(unreviewed).toEqual(['536']);
   });
 
   it('keeps departments missing from the scrape and reports them as unused', () => {
-    const { table, unused } = reconcile([reviewedMilk], new Map([[coffee.id!, coffee]]));
+    const { table, unused } = reconcile([reviewedMilk], new Map([['536', coffee]]));
     expect(table.map((row) => row.id)).toEqual(['536', '91208']);
     expect(unused).toEqual(['91208']);
   });

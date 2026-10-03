@@ -39,12 +39,12 @@ export function departmentsSeen(products: RawProduct[]): Map<string, RawDepartme
 
 const BACKROOM = /JÄTÄ SUORAAN PUUTTEEKSI|takaa kerättävät|Kerääjä päivittää/i;
 const JUNK = /toimituskoodit/i;
-const COUNTER = /PTISKI|tiski/i;
+const COUNTER = /tiski/i; // PTISKI service counters and Juustotiski
 const FROZEN = /pakaste/i;
 const CHILLED = /MAITO|JUUSTO|kylmä|Lihat|tiski/i;
 
 /** A first guess from the department's name and zone. */
-export function guessDepartment(department: RawDepartment): CuratedDepartment {
+export function guessDepartment(id: string, department: RawDepartment): CuratedDepartment {
   const name = department.name ?? '';
   const text = `${name} ${department.zone ?? ''}`;
   const kind: DepartmentKind = BACKROOM.test(name)
@@ -59,7 +59,7 @@ export function guessDepartment(department: RawDepartment): CuratedDepartment {
     : CHILLED.test(text)
       ? 'chilled'
       : 'ambient';
-  return { id: department.id ?? '', name, kind, temperature, reviewed: false };
+  return { id, name, kind, temperature, reviewed: false };
 }
 
 const byId = (a: { id: string }, b: { id: string }) =>
@@ -81,7 +81,7 @@ export function reconcile(
     if (row) {
       rows.push({ ...row, name: department.name ?? row.name });
     } else {
-      rows.push(guessDepartment(department));
+      rows.push(guessDepartment(id, department));
       added.push(id);
     }
   }
