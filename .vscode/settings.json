@@ -4,5 +4,6 @@
   "editor.codeActionsOnSave": { "source.fixAll.eslint": "explicit" },
   "typescript.tsdk": "node_modules/typescript/lib",
   "files.eol": "\n",
-  "terminal.integrated.defaultProfile.windows": "Git Bash"
+  "terminal.integrated.defaultProfile.windows": "Git Bash",
+  "js/ts.tsdk.path": "node_modules/typescript/lib"
 }

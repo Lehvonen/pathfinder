@@ -6,7 +6,7 @@
 | React SVG components shared by both apps  | `packages/map-render/` (planned) |
 | The shopping app                          | `apps/web/src/`                  |
 | The map editor (internal tool)            | `apps/map-editor/src/`           |
-| Scraper (Python)                          | `scraper/`                       |
+| Scraper (TypeScript, run with Bun)        | `scraper/`                       |
 | Data build / validation scripts           | `scripts/`                       |
 | Hand-made fixtures                        | `data/mock/`                     |
 | Implementation plans, one per feature     | `docs/plans/`                    |
@@ -61,6 +61,7 @@ All commands below are run from the repo root.
 | `pnpm --filter @pathfinder/core typecheck`       | Core only       |
 | `pnpm --filter @pathfinder/web typecheck`        | Web app only    |
 | `pnpm --filter @pathfinder/map-editor typecheck` | Map editor only |
+| `pnpm --filter @pathfinder/scraper typecheck`    | Scraper only    |
 
 ### Tests
 
@@ -89,3 +90,15 @@ On macOS use `open` instead of `start`.
 | `pnpm --filter @pathfinder/web dev`        | Dev server for the shopping app, with live reload                                |
 | `pnpm --filter @pathfinder/map-editor dev` | Dev server for the map editor                                                    |
 | `pnpm --filter @pathfinder/web preview`    | Serves the built web app, closest to what Netlify serves. Run `pnpm build` first |
+
+## Scraper
+
+`scraper/export-kupittaa.ts` exports every product in K-Citymarket Turku Kupittaa (store `N119`) with its name, price and in-store location (department, shelf, level). It reuses the browser session from [p18a/mcp-k-ruoka](https://github.com/p18a/mcp-k-ruoka), which is cloned next to this repo rather than copied in, because that repo has no licence. Background and caveats: `docs/ARCHITECTURE.md` §7.
+
+**Setup, every command and variable, output files and troubleshooting: [`scraper/README.md`](scraper/README.md).** The most common commands, from the repo root:
+
+```bash
+bun run scraper/export-kupittaa.ts collect   # list every product: EAN, name, brand, price (~25 min)
+bun run scraper/export-kupittaa.ts scrape    # fetch each product's location (~18 h, resumable)
+bun run scraper/export-kupittaa.ts status    # progress counts, no network
+```
