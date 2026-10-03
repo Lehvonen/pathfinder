@@ -163,11 +163,12 @@ Revisit only after submission, if the app is actually being used.
 │
 ├── scraper/                 Bun + TypeScript workspace package; the `ruoka` session it uses lives outside, see §7
 │   ├── export-kupittaa.ts   whole-store export: products + in-store location → cache/
-│   ├── normalise.ts         raw → schema (planned)
+│   ├── kupittaa-format.ts   pure helpers for the export, tested
+│   ├── normalise.ts         scrape → schema (planned)
 │   ├── diff.ts              compare scrapes, report moved/removed products (planned)
 │   ├── README.md            how to run the export
 │   ├── package.json, tsconfig.json
-│   └── cache/               raw responses, gitignored
+│   └── cache/               trimmed records, gitignored
 │
 ├── data/
 │   ├── graph/               SOURCE: hand-edited in the map editor, one file per section
@@ -291,7 +292,11 @@ summarised in §17, but where the two differ, `types.ts` is authoritative.
 ## 7. Data Pipeline
 
 1. The `ruoka` scraper (below) pulls products with their in-store location, rate-limited,
-   writing raw responses to `scraper/cache/`. Development never re-hits the site.
+   and caches them in `scraper/cache/` as **trimmed records**: the fields the pipeline
+   uses, plus price for people reading the CSV. Raw responses are not kept (§17).
+   Development never re-hits the site for data already cached; a field that is not cached
+   means re-running the listing (~25 min) or, for location fields, the location phase
+   (~18 h).
    The whole-store export is `scraper/export-kupittaa.ts`, which reuses the `ruoka`
    browser session: it lists every product by category, then fetches each one's location
    from `/kr-api/v4/products/<slug>?storeId=N119`, one request every 1.5 s, resumable,
@@ -832,8 +837,8 @@ starting budget to be confirmed or adjusted against that measurement, once, earl
 **How core stays inside its budget:**
 
 - Only fields the app reads are normalised at all (§6). Price, images and descriptions
-  are dropped during normalisation, not filtered at load. (The scraper
-  keeps price in its own cache and CSV; it never reaches `data/build/`.)
+  are dropped during normalisation, not filtered at load. The scraper keeps price in its
+  own cache and CSV only (§17).
 - Category ids are interned integers rather than strings.
 - Primary placements ship as a flat `EAN → { nodeId, categoryId }` map, separate from
   the richer `Placement` records. The `categoryId` is there so the frozen-last
@@ -1105,6 +1110,8 @@ time to fix what it reveals.
 | Hosting                                    | **Netlify**                                                                                                                                                           | `netlify.toml` committed; static deploy with HTTPS                                                                                                                    |
 | Map editor deployment                      | **Local-only**                                                                                                                                                        | Used at a desk by one person; no reason to host it                                                                                                                    |
 | Scraper                                    | **`scraper/export-kupittaa.ts`**, reusing the `p18a/mcp-k-ruoka` browser session from a sibling clone                                                                 | Returns store-specific name, price, popularity and shelf location; upstream has no licence, so its code is loaded at runtime, not copied                              |
+| Scrape cache                               | **Trimmed records, not raw responses**                                                                                                                                | Raw product responses are ~12 KB each, about 0.5 GB per store; missing fields have so far been recovered by re-running the listing                                    |
+| Price                                      | **Allowed in `scraper/cache/` and `kupittaa.csv` only**, never in `data/` (normalised or build)                                                                       | People use the CSV; prices are out of scope for the app (§2) and the core tier is budgeted (§14)                                                                      |
 
 ### Documented as future work, not as oversights
 
