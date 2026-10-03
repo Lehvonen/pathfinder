@@ -7,11 +7,8 @@
  * listing names. The ndjson is the source for location and availability.
  */
 
-type Json = Record<string, unknown>;
+import { isObject, num, str } from '../kupittaa-format';
 
-const isObject = (v: unknown): v is Json => typeof v === 'object' && v !== null;
-const str = (v: unknown): string | null => (typeof v === 'string' ? v : null);
-const num = (v: unknown): number | null => (typeof v === 'number' ? v : null);
 const bool = (v: unknown): boolean | null => (typeof v === 'boolean' ? v : null);
 
 export interface RawDepartment {
@@ -39,7 +36,8 @@ export interface RawProduct {
   location: RawLocation | null;
 }
 
-export type LoadIssueReason = 'not-fetched' | 'not-queued' | 'duplicate-record' | 'damaged-line';
+export type LoadIssueReason =
+  'not-fetched' | 'not-queued' | 'duplicate-record' | 'duplicate-queue-entry' | 'damaged-line';
 
 export interface LoadIssue {
   ean: string | null; // null for a line too damaged to read
@@ -129,10 +127,16 @@ export function parseProducts(text: string): { records: FetchedRecord[]; issues:
   return { records, issues };
 }
 
+/** The queued value, unless it is missing or blank; then the fetched one. */
+const queuedOr = (queued: string | null, fetched: string | null): string | null =>
+  queued?.trim() ? queued : fetched;
+
 /**
  * One RawProduct per EAN that is both queued and fetched. A product queued but not yet
  * fetched (a scrape still running) or fetched but no longer queued is reported and left
- * out. A repeated ndjson record is reported and the last one wins, as in the exporter.
+ * out. A repeated ndjson record or queue entry is reported and the last one wins, as in
+ * the exporter. The exporter writes the queue from a Map, so a repeated queue entry can
+ * only come from an older or hand-edited file: the check is defensive.
  */
 export function joinScrape(
   queue: QueueEntry[],
@@ -145,10 +149,16 @@ export function joinScrape(
     fetched.set(record.ean, record);
   }
 
-  const queued = new Set<string>();
-  const products: RawProduct[] = [];
+  // Map.set keeps the first position but the last value; output order does not matter,
+  // cleanProducts sorts by EAN
+  const queued = new Map<string, QueueEntry>();
   for (const entry of queue) {
-    queued.add(entry.ean);
+    if (queued.has(entry.ean)) issues.push({ ean: entry.ean, reason: 'duplicate-queue-entry' });
+    queued.set(entry.ean, entry);
+  }
+
+  const products: RawProduct[] = [];
+  for (const entry of queued.values()) {
     const record = fetched.get(entry.ean);
     if (!record) {
       issues.push({ ean: entry.ean, reason: 'not-fetched' });
@@ -156,9 +166,9 @@ export function joinScrape(
     }
     products.push({
       ean: entry.ean,
-      name: entry.name ?? record.name,
-      brand: entry.brand ?? record.brand,
-      categoryPath: entry.categoryPath ?? record.categoryPath,
+      name: queuedOr(entry.name, record.name),
+      brand: queuedOr(entry.brand, record.brand),
+      categoryPath: queuedOr(entry.categoryPath, record.categoryPath),
       popularity: entry.popularity,
       isAvailable: record.isAvailable,
       location: record.location,

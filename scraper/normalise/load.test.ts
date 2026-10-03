@@ -45,12 +45,20 @@ describe('parseQueue', () => {
     expect(parseQueue(JSON.stringify([{ name: 'no ean' }, null]))).toEqual([]);
   });
 
+  it('reads an empty queue', () => {
+    expect(parseQueue('[]')).toEqual([]);
+  });
+
   it('rejects a queue that is not an array', () => {
     expect(() => parseQueue('{}')).toThrow('not an array');
   });
 });
 
 describe('parseProducts', () => {
+  it('reads an empty file as no records', () => {
+    expect(parseProducts('')).toEqual({ records: [], issues: [] });
+  });
+
   it('keeps location fields and drops segment', () => {
     const { records, issues } = parseProducts(ndjson(milkRecord));
     expect(issues).toEqual([]);
@@ -78,6 +86,43 @@ describe('parseProducts', () => {
 });
 
 describe('joinScrape', () => {
+  it('joins nothing to nothing', () => {
+    expect(joinScrape([], [])).toEqual({ products: [], issues: [] });
+  });
+
+  it('falls back to the fetched record when a queued field is empty or blank', () => {
+    const queue = [{ ean: milk.ean, name: '  ', brand: '', categoryPath: '', popularity: 0 }];
+    const record = { ...milkRecord, brand: 'Valio' };
+    const [product] = joinScrape(queue, parseProducts(ndjson(record)).records).products;
+    expect(product).toMatchObject({
+      name: milk.name,
+      brand: 'Valio',
+      categoryPath: milk.categoryPath,
+    });
+  });
+
+  it('keeps the last of repeated queue entries and reports each repeat once', () => {
+    // The exporter writes the queue from a Map; repeats only come from older or edited files
+    const renamed = { ...milk, name: 'Pirkka kevytmaito 1 l' };
+    const { products, issues } = joinScrape(
+      [milk, milk, renamed],
+      parseProducts(ndjson(milkRecord)).records,
+    );
+    expect(products.map((p) => p.name)).toEqual(['Pirkka kevytmaito 1 l']);
+    expect(issues).toEqual([
+      { ean: milk.ean, reason: 'duplicate-queue-entry' },
+      { ean: milk.ean, reason: 'duplicate-queue-entry' },
+    ]);
+  });
+
+  it('reports a repeated queue entry that was never fetched as not fetched only once', () => {
+    const { issues } = joinScrape([milk, milk], []);
+    expect(issues).toEqual([
+      { ean: milk.ean, reason: 'duplicate-queue-entry' },
+      { ean: milk.ean, reason: 'not-fetched' },
+    ]);
+  });
+
   it('takes name, brand, category and popularity from the queue', () => {
     const { products } = joinScrape([milk], parseProducts(ndjson(milkRecord)).records);
     expect(products).toEqual([
@@ -88,7 +133,11 @@ describe('joinScrape', () => {
         categoryPath: milk.categoryPath,
         popularity: 22234.8,
         isAvailable: true,
-        location: parseProducts(ndjson(milkRecord)).records[0]?.location,
+        location: {
+          shelf: '05',
+          level: '1',
+          department: milkRecord.location.department,
+        },
       },
     ]);
   });
