@@ -2,9 +2,10 @@
  * The cleaning rules (docs/plans/normalise.md §4, rules 2–7 and 10). Pure: raw products in,
  * clean products plus a reason for every product left out.
  *
- * The output is not yet the contract's Product: categoryId is assigned later from
- * categoryPath, by categories.ts.
+ * The output carries the contract's Product and Placement fields, except categoryId,
+ * which categories.ts assigns later from categoryPath, plus what later steps need.
  */
+import type { Placement, Product } from '@pathfinder/core';
 import { compareStrings } from './compare';
 import type { RawLocation, RawProduct } from './load';
 
@@ -19,16 +20,13 @@ export interface Exclusion {
   reason: ExclusionReason;
 }
 
-export interface CleanProduct {
-  ean: string;
-  name: string;
-  brand?: string;
-  categoryPath: string | null;
-  popularity: number | null; // 0 means unranked, not a tie (ARCHITECTURE.md §6)
-  departmentId: string;
-  shelfId: string;
-  shelfLevel?: number;
-}
+/** Derived from the contract, so a change to types.ts is a compile error here. */
+export type CleanProduct = Omit<Product, 'categoryId'> &
+  Omit<Placement, 'ean' | 'isPrimary'> & {
+    categoryPath: string | null;
+    popularity: number | null; // 0 means unranked, not a tie (ARCHITECTURE.md §6)
+    departmentId: string;
+  };
 
 /** Shelf `00` means the store records the department but no shelf. */
 export const DEPARTMENT_WIDE_SHELF = '00';
