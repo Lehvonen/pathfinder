@@ -7,39 +7,9 @@ import {
   shelfLevel,
   type DepartmentKind,
 } from './clean';
-import type { RawProduct } from './load';
-
-const milk: RawProduct = {
-  ean: '6410405082657',
-  name: 'Pirkka  suomalainen kevytmaito 1l ',
-  brand: 'Pirkka',
-  categoryPath: 'maito-juusto-munat-ja-rasvat/maidot-ja-piimat/maidot',
-  popularity: 22234.8,
-  isAvailable: true,
-  location: {
-    shelf: '05',
-    level: '1',
-    department: {
-      id: '91208',
-      name: '(MAITO) Maidot ja piimät - KORVAA ITSE',
-      orderNumber: 68,
-      zone: 'KERÄILY',
-      isPublic: false,
-    },
-  },
-};
+import { inDepartment, milk, milkLocation, product } from './fixtures';
 
 const noKinds = new Map<string, DepartmentKind>();
-
-/** A copy of milk with another EAN and any fields overridden. */
-function product(ean: string, overrides: Partial<RawProduct> = {}): RawProduct {
-  return { ...milk, ean, ...overrides };
-}
-
-/** Milk's location, moved to another department. */
-function inDepartment(id: string): RawProduct['location'] {
-  return { ...milk.location!, department: { ...milk.location!.department!, id } };
-}
 
 describe('isValidEan', () => {
   it.each(['12345678', '012345678905', '6410405082657', '16410405082654'])('accepts %s', (ean) => {
@@ -105,7 +75,7 @@ describe('cleanProducts', () => {
 
   it('gives a department-only product the department-wide shelf and no level', () => {
     const [clean] = cleanProducts(
-      [product('6410405000003', { location: { ...milk.location!, shelf: '00', level: '4' } })],
+      [product('6410405000003', { location: { ...milkLocation, shelf: '00', level: '4' } })],
       noKinds,
     ).products;
     expect(clean?.shelfId).toBe('91208:00');
@@ -113,7 +83,8 @@ describe('cleanProducts', () => {
   });
 
   it('cleans a product into the intermediate shape', () => {
-    expect(cleanProducts([milk], noKinds)).toEqual({
+    const messy = { ...milk, name: 'Pirkka  suomalainen kevytmaito 1l ' };
+    expect(cleanProducts([messy], noKinds)).toEqual({
       products: [
         {
           ean: '6410405082657',
@@ -136,7 +107,7 @@ describe('cleanProducts', () => {
         product('6410405000002', {
           brand: ' ',
           popularity: 0,
-          location: { ...milk.location!, level: '0' },
+          location: { ...milkLocation, level: '0' },
         }),
       ],
       noKinds,
