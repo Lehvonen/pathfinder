@@ -753,7 +753,7 @@ Monday. This outranks every checkbox below.
 - [ ] Ranking by popularity, boosted for primary placements and aliases; unranked last
 - [ ] Hot index (most popular products) loaded first, full index in a Web Worker straight after; both precached
 - [ ] **Measure on the oldest team phone**: hot-index size, cold start to first search, keystroke latency (§14 targets); prefix table only if needed
-- [ ] Decide whether products with no Kupittaa location are searchable _(ready when: the full scrape has finished)_
+- [x] Decide whether products with no Kupittaa location are searchable — not searchable, excluded by `normalise.ts` (§17)
 - [ ] Generic resolution: category match → generic list entry
 - [ ] Single-item lookup → map pin
 
@@ -1132,6 +1132,7 @@ time to fix what it reveals.
 | Scraper                                    | **`scraper/export-kupittaa.ts`**, reusing the `p18a/mcp-k-ruoka` browser session from a sibling clone                                                                 | Returns store-specific name, price, popularity and shelf location; upstream has no licence, so its code is loaded at runtime, not copied                              |
 | Scrape cache                               | **Trimmed records, not raw responses**                                                                                                                                | Raw product responses are ~12 KB each, about 0.5 GB per store; missing fields have so far been recovered by re-running the listing                                    |
 | Price                                      | **Allowed in `scraper/cache/` and `kupittaa.csv` only**, never in `data/` (normalised or build)                                                                       | People use the CSV; prices are out of scope for the app (§2) and the core tier is budgeted (§14)                                                                      |
+| Products with no Kupittaa location         | **Not searchable**; `normalise.ts` excludes them as `no-location`, listed in `report.md`                                                                              | They cannot be routed, and they are web-shop items (mostly clothing and shoes) that k-ruoka.fi shows no store location for either                                     |
 
 ### Documented as future work, not as oversights
 
@@ -1147,4 +1148,3 @@ time to fix what it reveals.
 - Whether the route-mode toggle is user-visible or a developer flag
 - How many test lists the benchmark uses, and how they are generated
 - Hot-index size (top N products), set by measurement against the §14 targets
-- Whether products with no Kupittaa location are searchable at all
