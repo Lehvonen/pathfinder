@@ -144,11 +144,14 @@ query ──► normalise ──► aliases ──► match ──► rank ─�
 ```
 
 1. **Normalise**, applied identically to names and queries: remove zero-width
-   characters, decompose accents and drop them (`crème` → `creme`, `ä` → `a`, `ö` → `o`,
-   plus `ø`, `æ`, `ß`, which do not decompose), lowercase, turn every other character into
-   a space (`wc-paperi` → `wc paperi`), collapse spaces. `leipa` and `leipä` are the same
-   query; there is **no** extra score for typing the ä, because any boost would break the
-   pre-sorted order the scan relies on.
+   characters, lowercase, decompose accents and drop them (`crème` → `creme`, plus `ø`,
+   `æ`, `ß`, which do not decompose), turn every other character into a space
+   (`wc-paperi` → `wc paperi`), collapse spaces. **å, ä and ö are kept as letters of their
+   own** (decided 2026-10-04): `nakki` (sausage) must never find `näkkileipä`
+   (crispbread), and folding ä into a made half of the 174 "nakki" results crispbread. A
+   plain a or o written with a separate ¨ or ˚ is read as ä, ö or å. So `leipa` is not
+   `leipä`: it finds nothing itself, and typo correction then offers "leipä", labelled
+   (step 9).
 2. **Aliases** (`aliases.json`, hand-maintained): map a query to one or more search terms,
    e.g. `maitoa → maito`, `kevari → kevytmaito`, `jogu → jogurtti`. Applied to whole
    query words; the word still being typed also picks up aliases whose key starts with
@@ -262,7 +265,8 @@ On the real catalogue:
 - **The §14 target**: `ma` and `maito` put a milk first; `maito`'s first category is
   "Maidot", never a top-level category.
 - Compounds: `leipä` finds `ruisleipä` first; `maito` finds `kevytmaito`.
-- Folding: `leipa` and `leipä` return identical results; `creme fraiche` finds products.
+- Folding: `creme fraiche` finds crème fraîche; `nakki` never finds näkkileipä; `leipa`
+  (no ä) is offered "leipä" by typo correction.
 - Aliases: `vessapaperi` finds at least 5 products.
 - AND: `maito laktoositon` returns only names containing both; `maito l` only names with
   a word starting with `l`.

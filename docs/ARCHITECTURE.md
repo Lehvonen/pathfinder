@@ -546,8 +546,9 @@ design and the measurements behind it are in `docs/plans/search.md`.
 - **Infix matching.** A query word of 3+ letters matches anywhere in a name, because
   the product is usually the last part of a compound (`ruisleipä` is bread). Words of
   1–2 letters match word starts only, or `m` would match almost everything.
-- **Normalisation** folds case and accents on both sides, so `leipa` finds `leipä` and
-  `creme` finds `crème`.
+- **Normalisation** folds case and accents on both sides, so `creme` finds `crème`, but
+  **å, ä and ö are letters of their own**: `nakki` (sausage) never finds `näkkileipä`
+  (crispbread).
 - **Alias table** (`aliases.json`), hand-maintained, covering colloquialisms, brand
   shorthand, inflected forms and plural category names (`leipä` → "Leivät"). Aliases
   widen what matches and never drop the typed word; they do not boost. A term written

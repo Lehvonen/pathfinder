@@ -54,12 +54,19 @@ describe('the §14 target: milk first', () => {
 describe('Finnish compounds and folding', () => {
   it('leipä: bread first (leipä ends the word), and a bread category', () => {
     const r = search('leipä');
-    expect(first(r)).toMatch(/leipa( |$)/);
+    expect(first(r)).toMatch(/leipä( |$)/);
     expect(categoryNames(r)).toContain('Leivät');
   });
 
-  it('leipa and leipä give identical results', () => {
-    expect(search('leipa').products).toEqual(search('leipä').products);
+  it('nakki never finds näkkileipä: å, ä and ö are letters of their own', () => {
+    const r = engine.search('nakki ', 1000);
+    expect(r.products.length).toBeGreaterThan(0);
+    expect(names(r).filter((name) => name.includes('näkki'))).toEqual([]);
+    expect(search('näkkileipä').products.length).toBeGreaterThan(0);
+  });
+
+  it('leipa (no ä) finds nothing itself, so typo correction offers leipä, labelled', () => {
+    expect(search('leipa').corrected).toEqual({ from: 'leipa', to: 'leipä' });
   });
 
   it('juusto: no top-level category', () => {
