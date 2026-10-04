@@ -155,10 +155,29 @@ query ──► normalise ──► aliases ──► match ──► rank ─�
    it, once it has 4+ letters (`vessap` already finds `wc-paperi`), unless it has an
    alias of its own (`kana` means chicken from the first keystroke, not the start of
    `kananmuna`). Aliases widen what matches and never drop the typed word; they do not
-   boost. A term written **`-text`** excludes instead: a product or category whose name
-   contains the text is left out of that query's results, so `"kana": ["broileri",
-"-muna", "-porkkana", "-lakana"]` finds every chicken product but not eggs (_kanan
-   munia_), carrots (_porkkana_) or bed sheets (_lakana_).
+   boost.
+
+   The file maps a word to its extra terms; the word itself is always searched too:
+
+   ```json
+   "vessapaperi": ["wc-paperi"],
+   "maito": ["=maidot"],
+   "kana": ["broileri", "-muna", "-porkkana", "-lakana"]
+   ```
+
+   Two term forms change what a term does:
+
+   - **`=word`** matches the whole word only: `=maidot` finds "Maidot" (milk) but not
+     "Maidottomat" (dairy-free), which a plain `maidot` would. Use it when a plain term
+     is also the start of an unrelated longer word.
+   - **`-text`** excludes instead: a product or category whose name contains the text is
+     left out of that query's results. With `-muna`, `-porkkana` and `-lakana`, `kana`
+     finds every chicken product but not eggs (_kanan munia_), carrots (_porkkana_) or
+     bed sheets (_lakana_).
+
+   Rules, checked by the build: a key is one word of at most 40 characters, at most 16
+   terms, no two keys that fold to the same word.
+
 3. **Match.** A query word of 3+ letters matches anywhere in the name (`maito` finds
    `kevytmaito`); a word of 1–2 letters matches only at the start of a word, decided per
    word, so `maito l` narrows to names with a word starting with `l` rather than every

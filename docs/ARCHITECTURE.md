@@ -551,6 +551,7 @@ design and the measurements behind it are in `docs/plans/search.md`.
 - **Alias table** (`aliases.json`), hand-maintained, covering colloquialisms, brand
   shorthand, inflected forms and plural category names (`leipä` → "Leivät"). Aliases
   widen what matches and never drop the typed word; they do not boost. A term written
+  `=word` matches the whole word only (`=maidot`: milk, not "maidottomat", dairy-free);
   `-text` leaves out products and categories containing that text (`kana` without eggs:
   `-muna`).
 - **Ranking by popularity only.** Kesko's popularity score (§6) is the ranking, so
