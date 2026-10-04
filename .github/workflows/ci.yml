@@ -40,7 +40,7 @@ jobs:
       - run: pnpm test
       - uses: codecov/codecov-action@v7
         with:
-          files: packages/core/coverage/lcov.info
+          files: packages/core/coverage/lcov.info,packages/search/coverage/lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
