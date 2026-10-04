@@ -156,7 +156,7 @@ Revisit only after submission, if the app is actually being used.
 │
 ├── scripts/
 │   ├── validate-data.ts     Zod schemas + graph integrity checks
-│   ├── build-data.ts        scraper output → data/build/, stamps version
+│   ├── build-data.ts        data/normalised/ + data/graph/ → data/build/, stamps version
 │   └── seed-synthetic.ts    deterministic 50k-product / 400-node fixture (planned)
 │
 ├── .env.example             committed; VITE_DATA_SOURCE etc.
@@ -271,6 +271,13 @@ summarised in §17, but where the two differ, `types.ts` is authoritative.
   one of those is `isPrimary`; that is the one routing uses.
 - **A placement names a shelf, not a node.** The access node comes from the shelf's
   `accessNodeId` in the graph, derived at build time, so the two cannot disagree.
+- **A shelf ID is `<departmentId>:<shelf>`**, e.g. `91208:05`. Shelf numbers repeat in
+  every department, so the number printed on the shelf is only the part after the
+  colon. The K-Ruoka department id is used rather than the name, because names carry
+  notes such as "KORVAA ITSE" that change. Shelf `00` means the store records only the
+  department (48% of products at Kupittaa); `<departmentId>:00` is the
+  **department-wide shelf**, drawn as one polygon over the department area, so those
+  products route to the department without a change to `types.ts`.
 - **`temperature` on category** drives the frozen-last routing constraint.
 - **Both entry kinds are supported; generic is the default.** People write "maito",
   not a specific SKU, and which carton gets picked is decided at the shelf. Forcing
@@ -746,7 +753,7 @@ Monday. This outranks every checkbox below.
 - [ ] Ranking by popularity, boosted for primary placements and aliases; unranked last
 - [ ] Hot index (most popular products) loaded first, full index in a Web Worker straight after; both precached
 - [ ] **Measure on the oldest team phone**: hot-index size, cold start to first search, keystroke latency (§14 targets); prefix table only if needed
-- [ ] Decide whether products with no Kupittaa location are searchable _(ready when: the full scrape has finished)_
+- [x] Decide whether products with no Kupittaa location are searchable — not searchable, excluded by `normalise.ts` (§17)
 - [ ] Generic resolution: category match → generic list entry
 - [ ] Single-item lookup → map pin
 
@@ -812,10 +819,13 @@ edits.
 
 ### Data build command
 
-`pnpm data:build` — takes scraper output, normalises it, validates it, writes
-`data/build/`, and stamps a version. Generated artefacts are committed, so the
-command that produces them must be reproducible and named. Run locally; CI verifies
-rather than regenerates.
+`pnpm data:build` — reads the committed `data/normalised/` output and the graph,
+validates them, writes `data/build/`, and stamps a version. It does not normalise:
+that is the step before it, `bun run scraper/normalise.ts` (§7 step 2), run by hand
+after a scrape. So `data:build` needs neither Bun nor the gitignored scrape cache, and
+anyone on the team can run it. Generated artefacts are committed, so the command that
+produces them must be reproducible and named. Run locally; CI verifies rather than
+regenerates.
 
 ### Data budget and bundle tiering
 
@@ -1111,6 +1121,7 @@ time to fix what it reveals.
 | Rendering code                             | Pure geometry in `core`, React SVG in `map-render`                                                                                                                    | `core` stays framework-free                                                                                                                                           |
 | Graph source                               | `data/graph/` per section; merged into `data/build/core/graph.json`                                                                                                   | Parallel mapping without conflicts; hand-edited and generated files kept apart                                                                                        |
 | Placement → node                           | Placement stores `shelfId` only; node derived from `Shelf.accessNodeId` at build time                                                                                 | One source of truth for where you stand to reach a shelf                                                                                                              |
+| Shelf ID format                            | `<departmentId>:<shelf>`; `:00` is the department-wide shelf, drawn as one area                                                                                       | Shelf numbers repeat in every department; about half of all products have a department but no shelf, and this routes them without a type change                       |
 | Core placement data                        | `EAN → { nodeId, categoryId }` plus `CategoryPlacement`, both core tier                                                                                               | Core alone must resolve every list entry and apply the frozen-last constraint                                                                                         |
 | Search index payload                       | `{ ean, name }`                                                                                                                                                       | Offline results render a name without the display tier                                                                                                                |
 | Search ranking and loading                 | **Ranked by Kesko popularity.** A **hot index** of the most popular products loads first; the **full index** loads in a Web Worker straight after. **Both precached** | Speed over size: nobody should wait to find milk. Popularity decides load order, not what is offline, so full offline search is kept                                  |
@@ -1121,6 +1132,7 @@ time to fix what it reveals.
 | Scraper                                    | **`scraper/export-kupittaa.ts`**, reusing the `p18a/mcp-k-ruoka` browser session from a sibling clone                                                                 | Returns store-specific name, price, popularity and shelf location; upstream has no licence, so its code is loaded at runtime, not copied                              |
 | Scrape cache                               | **Trimmed records, not raw responses**                                                                                                                                | Raw product responses are ~12 KB each, about 0.5 GB per store; missing fields have so far been recovered by re-running the listing                                    |
 | Price                                      | **Allowed in `scraper/cache/` and `kupittaa.csv` only**, never in `data/` (normalised or build)                                                                       | People use the CSV; prices are out of scope for the app (§2) and the core tier is budgeted (§14)                                                                      |
+| Products with no Kupittaa location         | **Not searchable**; `normalise.ts` excludes them as `no-location`, listed in `report.md`                                                                              | They cannot be routed, and they are web-shop items (mostly clothing and shoes) that k-ruoka.fi shows no store location for either                                     |
 
 ### Documented as future work, not as oversights
 
@@ -1136,4 +1148,3 @@ time to fix what it reveals.
 - Whether the route-mode toggle is user-visible or a developer flag
 - How many test lists the benchmark uses, and how they are generated
 - Hot-index size (top N products), set by measurement against the §14 targets
-- Whether products with no Kupittaa location are searchable at all
