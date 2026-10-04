@@ -1,7 +1,8 @@
 # Plan: search engine
 
-**Status:** steps 1–6 built (engine, categories, tiers, build); PC numbers in §10. Web app,
-phone measurement and typo tolerance (steps 7–9) to do
+**Status:** steps 1–7 and 9 built (engine, categories, tiers, build, web app, category page,
+typo correction); PC numbers in §10. **Not done: the phone measurement (step 8), deferred to a
+later date (§11).**
 **Architecture refs:** §6 (generic entries, popularity), §7 step 5 (search build),
 §10 (search), §11 (frontend), §14 (budget, performance targets), §17 (search decisions)
 **Covers checklist items:** Track E, except "Single-item lookup → map pin" (needs the map)
@@ -217,11 +218,10 @@ Each step is a handful of atomic commits, a source file with its test.
    category page.
 8. **Measure**: a bench over the real data with typing sequences (`m`, `ma`, `mai`,
    `maito`, multi-word typos like `maito laktoositonx`): `pnpm bench:search`, PC numbers in
-   §10. Then
-   run it in the web app on the oldest team phone, measuring keystroke → results painted
-   and the longest freeze while tiers load. **Decision point:** if every keystroke is under
-   50 ms, propose in §17 that the scan replaces FlexSearch; if not, try a worker or an
-   index, each a §17 decision.
+   §10. Then run it in the web app on the oldest team phone (`?bench`), measuring
+   keystroke → results painted and the longest freeze while tiers load. **Decision point:**
+   if every keystroke is under 50 ms, propose in §17 that the scan replaces FlexSearch; if
+   not, try a worker or an index, each a §17 decision. **Phone run not done yet (§11).**
 9. **Typo tolerance**: edit distance 1 on query words of five or more letters, only when the
    exact search returns fewer than 5 results and no categories, so it never pushes a
    correct match down. Its word list is built in idle time after tier 3 loads, never
@@ -303,5 +303,27 @@ Slowest sequence now: `vessapaperi`, p95 1.3 ms. While "vess…" is typed, the s
 the text for several alias terms before it finds a match.
 
 At 10× slower, a typical old phone would see p95 ≈ 8 ms: inside the 50 ms
-keystroke → results target, slightly above this plan's 5 ms engine budget. The phone run in
-step 8 decides whether anything more is needed.
+keystroke → results target, slightly above this plan's 5 ms engine budget. Whether anything
+more is needed waits for the phone run (§11).
+
+## 11. Phone testing: not done yet
+
+**No phone has been tested.** Decided 2026-10-04: the phone run is deferred to a later date.
+For now the speed is judged by feel when using the app; exact phone numbers are not needed
+before then. Until it is done, every speed claim in this plan is a PC number or an estimate,
+and the §17 question "scan or index" stays open.
+
+What exists for it:
+
+- **The in-app benchmark**, `apps/web/src/bench/SearchBench.tsx`: it types the 12 benchmark
+  sequences into the real search screen and reports keystroke → results painted, the
+  engine alone, tier 1 ready time, and the longest freeze while tiers 2–3 load.
+- **How to run it** on a phone on the same wifi as the PC (PowerShell):
+  `$env:VITE_BENCH='1'; pnpm --filter @pathfinder/web build; pnpm --filter @pathfinder/web preview --host`,
+  then open `http://<PC address>:4173/?bench`, wait for "kaikki tasot ladattu" and tap
+  "Aja testi". A normal production build does not contain the benchmark.
+- **The only run so far** is headless Chromium on the development PC, production build:
+  keystroke → painted p50 5.9 ms / p95 6.7 ms / max 9.6 ms; engine p95 1.1 ms; tier 1 ready
+  88 ms after opening; no long tasks while tiers loaded.
+
+When it is done: record the phone, browser and numbers here, then close the §17 question.

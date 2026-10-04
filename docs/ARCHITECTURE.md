@@ -763,14 +763,14 @@ Monday. This outranks every checkbox below.
 ### Track E — Search
 
 - [ ] `String.includes` over 50 mock products — good enough for the first store run, delete later
-- [ ] `packages/search` engine: Finnish-aware normalisation, infix scan over pre-sorted tiers, early stop (`docs/plans/search.md`)
-- [ ] Typo tolerance, search-as-you-type
-- [ ] Alias table wired in, for product and category names
-- [ ] Ranking by popularity only; unranked last
-- [ ] Three tiers: tier 1 loaded first, tiers 2–3 straight after in small pieces; all precached
-- [ ] **Measure on the oldest team phone**: cold start to first search, keystroke → results painted, longest freeze while tiers load (§14 targets); an index only if needed
+- [x] `packages/search` engine: Finnish-aware normalisation, infix scan over pre-sorted tiers, early stop (`docs/plans/search.md`)
+- [x] Typo tolerance, search-as-you-type
+- [x] Alias table wired in, for product and category names
+- [x] Ranking by popularity only; unranked last
+- [x] Three tiers: tier 1 loaded first, tiers 2–3 straight after in small pieces _(precaching is Track G)_
+- [ ] **Measure on the oldest team phone**: cold start to first search, keystroke → results painted, longest freeze while tiers load (§14 targets); an index only if needed. **Not done yet, deferred to a later date**; the in-app benchmark (`?bench`) is ready (`docs/plans/search.md` §11)
 - [x] Decide whether products with no Kupittaa location are searchable — not searchable, excluded by `normalise.ts` (§17)
-- [ ] Category results: add as a generic list entry, or browse the category with its own search
+- [x] Category results: add as a generic list entry, or browse the category with its own search
 - [ ] Single-item lookup → map pin
 
 ### Track F — Frontend
@@ -1168,4 +1168,5 @@ time to fix what it reveals.
 - Stride length calibration for pace counting (measure per person, or agree one value)
 - Whether the route-mode toggle is user-visible or a developer flag
 - How many test lists the benchmark uses, and how they are generated
-- Whether the scan alone meets the §14 targets on the oldest team phone, or an index is needed
+- Whether the scan alone meets the §14 targets on the oldest team phone, or an index is needed.
+  No phone has been tested yet; the run is deferred (`docs/plans/search.md` §11)
