@@ -1,6 +1,7 @@
 # Plan: data cleaner (`normalise.ts`)
 
-**Status:** done except §7 step 7 (`data/mock/`); the §8 decisions are awaiting agreement
+**Status:** done except §7 step 7 (`data/mock/`); two §8 decisions are recorded in §17, three are awaiting
+agreement
 **Architecture refs:** §6 (data model), §7 step 2 (normalise), §13 Track B, §14 (budget)
 **Covers checklist items:** "`normalise.ts` — raw → schema" and "Full scrape reviewed by hand
 for junk, duplicates, missing shelves"
@@ -216,13 +217,13 @@ alongside steps 1–4 and only needs to land before step 5.
 
 ## 8. Decisions this needs (record in §17 once agreed)
 
-| Question                                         | Proposal                                                                                         |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| Shelf ID format                                  | `<departmentId>:<shelf>`; `:00` is the department-wide shelf the map draws as one area           |
-| Category source                                  | K-Ruoka's web category tree (3 levels), not store departments. It matches how people name things |
-| Products with no Kupittaa location (open in §17) | **Not searchable.** They can't be routed, and they're web-shop items. Excluded with a reason     |
-| Shopping bags and other `isAvailable: false`     | Excluded                                                                                         |
-| Commit `data/normalised/`                        | Yes, for the team and as the `diff.ts` baseline                                                  |
+| Question                                     | Proposal                                                                                         | Status              |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------- |
+| Shelf ID format                              | `<departmentId>:<shelf>`; `:00` is the department-wide shelf the map draws as one area           | **Recorded in §17** |
+| Category source                              | K-Ruoka's web category tree (3 levels), not store departments. It matches how people name things | Awaiting agreement  |
+| Products with no Kupittaa location           | **Not searchable.** They can't be routed, and they're web-shop items. Excluded with a reason     | **Recorded in §17** |
+| Shopping bags and other `isAvailable: false` | Excluded                                                                                         | Awaiting agreement  |
+| Commit `data/normalised/`                    | Yes, for the team and as the `diff.ts` baseline                                                  | Awaiting agreement  |
 
 ## 9. Out of scope here
 
