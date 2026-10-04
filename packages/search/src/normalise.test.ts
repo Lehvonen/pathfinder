@@ -3,8 +3,6 @@ import { fold, foldWithOffsets } from './normalise';
 
 describe('fold', () => {
   it.each([
-    ['Täysjyväruisleipä', 'taysjyvaruisleipa'],
-    ['ÄÖÅ äöå', 'aoa aoa'],
     ['Valio Arki crème fraîche 12%', 'valio arki creme fraiche 12'],
     ['Jamón Serrano', 'jamon serrano'],
     ['Smørrebrød Æble Straße Œuf', 'smorrebrod aeble strasse oeuf'],
@@ -12,13 +10,31 @@ describe('fold', () => {
     expect(fold(name)).toBe(folded);
   });
 
-  it('removes a decomposed accent (a + U+0308) like a precomposed ä', () => {
-    expect(fold('leipa\u0308')).toBe(fold('leipä'));
-    expect(fold('leipa\u0308')).toBe('leipa');
+  it.each([
+    ['Täysjyväruisleipä', 'täysjyväruisleipä'],
+    ['ÄÖÅ äöå', 'äöå äöå'],
+    ['Näkkileipä', 'näkkileipä'],
+  ])('keeps å, ä and ö as letters of their own: %s', (name, folded) => {
+    expect(fold(name)).toBe(folded);
+  });
+
+  it('never folds ä into a, so nakki and näkki stay different words', () => {
+    expect(fold('Nakki')).toBe('nakki');
+    expect(fold('Näkki')).not.toBe(fold('Nakki'));
+  });
+
+  it('reads a plain a or o plus a separate ¨ or ˚ as ä, ö or å', () => {
+    expect(fold('leipa\u0308')).toBe('leipä');
+    expect(fold('Ka\u030Ase o\u0308ljy')).toBe('kåse öljy');
+  });
+
+  it('still removes a separate accent mark that does not make å, ä or ö', () => {
+    expect(fold('cre\u0300me')).toBe('creme');
+    expect(fold('e\u0308')).toBe('e');
   });
 
   it.each([
-    ['Fazer Leipurit Rustico-leipä 400g', 'fazer leipurit rustico leipa 400g'],
+    ['Fazer Leipurit Rustico-leipä 400g', 'fazer leipurit rustico leipä 400g'],
     ['Arki™juustoviipale 500 g n.36 kpl/pak', 'arki juustoviipale 500 g n 36 kpl pak'],
     ['Pirkka (luomu) & muut, 1,5l', 'pirkka luomu muut 1 5l'],
   ])('turns punctuation and symbols into single spaces: %s', (name, folded) => {

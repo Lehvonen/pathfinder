@@ -11,7 +11,7 @@ const itemText = (h: Haystack, i: number) => h.text.slice(h.starts[i], h.starts[
 describe('buildHaystack', () => {
   it('joins folded names, each with a leading space and a trailing newline', async () => {
     const h = await build(['Pirkka banaani', 'Crème fraîche', 'Leipä']);
-    expect(h.text).toBe('\n pirkka banaani\n creme fraiche\n leipa\n');
+    expect(h.text).toBe('\n pirkka banaani\n creme fraiche\n leipä\n');
     expect(h.size).toBe(3);
   });
 

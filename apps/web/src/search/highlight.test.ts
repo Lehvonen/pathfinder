@@ -43,7 +43,7 @@ describe('highlightRanges', () => {
 
   it('keeps a separately written accent mark with its letter', () => {
     const name = 'Ruisleipa\u0308 400g';
-    expect(lit(name, [anywhere('leipa')])).toEqual(['leipa\u0308']);
+    expect(lit(name, [anywhere('leipä')])).toEqual(['leipa\u0308']);
   });
 
   it('spans a dropped apostrophe', () => {

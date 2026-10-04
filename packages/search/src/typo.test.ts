@@ -39,7 +39,7 @@ describe('buildVocabulary', () => {
       new Map([
         ['maito', 2],
         ['valio', 1],
-        ['leipa', 1],
+        ['leipä', 1],
       ]),
     );
     expect(vocabulary.get(6)).toEqual(new Map([['pirkka', 2]]));

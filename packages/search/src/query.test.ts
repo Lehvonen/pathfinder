@@ -67,7 +67,7 @@ describe('parseQuery aliases', () => {
   });
 
   it('lists the word once even when the alias repeats it', () => {
-    expect(terms(parse('Leipä '))).toEqual(['leipa', 'leivat']);
+    expect(terms(parse('Leipä '))).toEqual(['leipä', 'leivät']);
   });
 
   it('adds aliases of longer keys while a word of 4+ letters is being typed', () => {
@@ -108,8 +108,8 @@ describe('parseQuery subsumption', () => {
   const aliasTerms = (q: ParsedQuery) => terms(q).filter((term) => term !== 'xq');
 
   it('drops an anywhere term that contains another anywhere term', () => {
-    // typing "leip" also brings in leipä's aliases; "leipa" contains "leip"
-    expect(terms(parse('leip'))).toEqual(['leip', 'leivat']);
+    // typing "leip" also brings in leipä's aliases; "leipä" contains "leip"
+    expect(terms(parse('leip'))).toEqual(['leip', 'leivät']);
     expect(aliasTerms(parse('xq ', custom({ xq: ['kevyt', 'kevytmaito'] })))).toEqual(['kevyt']);
   });
 
@@ -133,7 +133,7 @@ describe('parseQuery subsumption', () => {
 
 describe('prepareAliases', () => {
   it('folds keys and terms and drops terms that fold to nothing', () => {
-    expect([...prepareAliases({ Leipä: ['Leivät', '—'] })]).toEqual([['leipa', ['leivat']]]);
+    expect([...prepareAliases({ Leipä: ['Leivät', '—'] })]).toEqual([['leipä', ['leivät']]]);
   });
 });
 
@@ -162,7 +162,7 @@ describe('parseQuery whole-word terms', () => {
   const aliasTerms = (q: ParsedQuery) => terms(q).filter((term) => term !== 'xq');
 
   it('turns an alias term written =word into a whole-word alternative', () => {
-    expect(parse('maito ', custom({ maito: ['maito', '=Maidöt'] })).slots[0]!.alternatives).toEqual(
+    expect(parse('maito ', custom({ maito: ['maito', '=MAIDOT'] })).slots[0]!.alternatives).toEqual(
       [
         { term: 'maito', mode: 'anywhere', needle: 'maito' },
         { term: 'maidot', mode: 'whole-word', needle: ' maidot ' },
