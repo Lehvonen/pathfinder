@@ -43,6 +43,12 @@ describe('the §14 target: milk first', () => {
     expect(r.categories[0]!.topProducts[0]?.name).toMatch(/maito/);
     expect(r.categories.every((c) => c.category.parentId !== undefined)).toBe(true);
   });
+
+  it('maito: nothing dairy-free (the alias term =maidot matches the whole word only)', () => {
+    const r = engine.search('maito ', 1000);
+    expect(categoryNames(r)).not.toContain('Maidottomat jogurtit');
+    expect(names(r).filter((name) => /maidoton|maidottom/.test(name))).toEqual([]);
+  });
 });
 
 describe('Finnish compounds and folding', () => {
