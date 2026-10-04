@@ -93,11 +93,19 @@ export function createSearchEngine(input: SearchEngineInput): SearchEngine {
     }
   };
 
-  const respond = (raw: string, categories: CategoryHit[], found: ReturnType<typeof collect>) => ({
+  const respond = (
+    raw: string,
+    query: ParsedQuery,
+    categories: CategoryHit[],
+    found: ReturnType<typeof collect>,
+  ): SearchResponse => ({
     query: raw,
     categories,
     ...found,
     pendingTiers: pendingTiers(),
+    terms: query.slots.flatMap((slot) =>
+      slot.alternatives.map(({ term, mode }) => ({ term, wordStart: mode === 'word-start' })),
+    ),
   });
 
   const categoryHits = (query: ParsedQuery): CategoryHit[] =>
@@ -116,16 +124,18 @@ export function createSearchEngine(input: SearchEngineInput): SearchEngine {
     addTier,
     search(raw, limit = PAGE_SIZE) {
       const query = parseQuery(raw, aliases);
-      if (query.isEmpty) return respond(raw, [], { products: [], cursor: null });
-      return respond(raw, categoryHits(query), collect(query, start, limit));
+      if (query.isEmpty) return respond(raw, query, [], { products: [], cursor: null });
+      return respond(raw, query, categoryHits(query), collect(query, start, limit));
     },
     searchMore(raw, cursor, limit = PAGE_SIZE) {
-      return respond(raw, [], collect(parseQuery(raw, aliases), cursor, limit));
+      const query = parseQuery(raw, aliases);
+      return respond(raw, query, [], collect(query, cursor, limit));
     },
     searchWithin(categoryId, raw, limit = PAGE_SIZE, cursor = start) {
       const mask = categoryIndex.subtreeMask(categoryId);
       const inCategory = (id: number) => mask[id] === 1;
-      return respond(raw, [], collect(parseQuery(raw, aliases), cursor, limit, inCategory));
+      const query = parseQuery(raw, aliases);
+      return respond(raw, query, [], collect(query, cursor, limit, inCategory));
     },
     getVersion: () => version,
     subscribe(listener) {
