@@ -6,9 +6,10 @@
   "scripts": {
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "pnpm -r typecheck && tsc -p scripts",
     "test": "pnpm -r test",
     "build": "pnpm -r build",
+    "data:search": "tsx scripts/build-search.ts",
     "prepare": "husky"
   },
   "lint-staged": {
