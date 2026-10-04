@@ -31,7 +31,7 @@ Profiled on 2026-10-04 from `data/normalised/` (scrape of 2026-10-03).
 | Ranking `leipä` / `pesuaine` with word-start matches first                | `leipäjuusto` / a rarer soap   | **Rank by popularity only.** The product is the last part of a compound (§5)       |
 | 1–2 letter words matched anywhere: `m` → 29,147 names, top `Kurkku Suomi` | `ma` word-start → a milk first | **Words of 1–2 letters match word starts only** (§5)                               |
 | Names with accents beyond ä/ö/å (`crème fraîche`, `Jamón`, `ø`)           | ~220                           | Fold with Unicode decomposition, not a hand-written table (§5)                     |
-| Linear `String.includes` over every name, per query, laptop               | ~2 ms                          | A phone 10× slower is still inside the 50 ms target, before any index              |
+| Linear `String.includes` over every name, per query, PC                   | ~2 ms                          | A phone 10× slower is still inside the 50 ms target, before any index              |
 | Distinct infix substrings (what a FlexSearch `full` tokenizer indexes)    | ~490,000                       | A prebuilt infix index is large; the size may not fit the 3 MB core budget         |
 | Distinct trigrams                                                         | ~9,500                         | A trigram index would be small, if one is needed at all                            |
 | Categories                                                                | 1,042, 27 top-level            | Clean K-Ruoka names: what group results are made of (§4)                           |
@@ -210,7 +210,7 @@ Each step is a handful of atomic commits, a source file with its test.
 7. **Web app**: data loading, the search bar, product and category results, and the
    category page.
 8. **Measure**: a bench over the real data with typing sequences (`m`, `ma`, `mai`,
-   `maito`, multi-word typos like `maito laktoositonx`). Record laptop numbers here, then
+   `maito`, multi-word typos like `maito laktoositonx`). Record PC numbers here, then
    run it in the web app on the oldest team phone, measuring keystroke → results painted
    and the longest freeze while tiers load. **Decision point:** if every keystroke is under
    50 ms, propose in §17 that the scan replaces FlexSearch; if not, try a worker or an
