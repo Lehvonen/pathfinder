@@ -1,7 +1,7 @@
 import type { Category } from '@pathfinder/core';
 import type { ProductHit, SearchEngine } from '@pathfinder/search';
 import { useId } from 'react';
-import ProductResult from './ProductResult';
+import ProductList from './ProductList';
 import SearchBar from './SearchBar';
 import { useSearch } from './useSearch';
 
@@ -25,13 +25,6 @@ function CategoryPage(props: CategoryPageProps) {
   const titleId = useId();
   const search = useSearch(engine, version, category.id);
   const subcategories = engine.subcategories(category.id);
-  const products = search.response?.products ?? [];
-  let note = '';
-  if ((search.response?.pendingTiers.length ?? 0) > 0) {
-    note = 'Haetaan lisää tuotteita…';
-  } else if (products.length === 0) {
-    note = 'Ei tuotteita.';
-  }
 
   return (
     <section className="category-page" aria-labelledby={titleId}>
@@ -58,23 +51,14 @@ function CategoryPage(props: CategoryPageProps) {
 
       <SearchBar value={search.query} onChange={search.setQuery} label={`Hae: ${category.name}`} />
 
-      <ul className="search-results">
-        {products.map((product) => (
-          <ProductResult
-            key={product.ean}
-            product={product}
-            terms={search.response?.terms ?? []}
-            onAdd={onAddProduct}
-          />
-        ))}
-      </ul>
-      <p className="search-note" aria-live="polite">
-        {note}
-      </p>
-      {search.canShowMore && (
-        <button type="button" className="search-results__more" onClick={search.showMore}>
-          Näytä lisää
-        </button>
+      {search.response && (
+        <ProductList
+          response={search.response}
+          emptyText="Ei tuotteita."
+          canShowMore={search.canShowMore}
+          onShowMore={search.showMore}
+          onAddProduct={onAddProduct}
+        />
       )}
     </section>
   );

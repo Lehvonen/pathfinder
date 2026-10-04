@@ -1,7 +1,7 @@
 import type { Category } from '@pathfinder/core';
 import type { ProductHit, SearchResponse } from '@pathfinder/search';
 import CategoryResult from './CategoryResult';
-import ProductResult from './ProductResult';
+import ProductList from './ProductList';
 
 type SearchResultsProps = {
   /** `null` until tier 1 is searchable. */
@@ -18,8 +18,7 @@ type SearchResultsProps = {
 
 /**
  * Categories first, then products, then "show more". The loading and empty states are
- * quiet notes, not errors (ARCHITECTURE.md §11); notes are announced politely so a screen
- * reader is not interrupted on every keystroke.
+ * quiet notes, not errors (ARCHITECTURE.md §11).
  */
 function SearchResults(props: SearchResultsProps) {
   const { response, query, error, canShowMore, onShowMore } = props;
@@ -40,44 +39,27 @@ function SearchResults(props: SearchResultsProps) {
     );
   }
 
-  const { categories, products, pendingTiers, terms } = response;
   const label = response.query.trim();
-  let note = '';
-  if (pendingTiers.length > 0) {
-    note = 'Haetaan lisää tuotteita…';
-  } else if (categories.length === 0 && products.length === 0) {
-    note = `Ei tuloksia haulle "${label}".`;
-  }
 
   return (
-    <section className="search-results" aria-label="Hakutulokset">
-      <ul>
-        {categories.map((hit) => (
+    <section aria-label="Hakutulokset">
+      <ProductList
+        response={response}
+        emptyText={`Ei tuloksia haulle "${label}".`}
+        canShowMore={canShowMore}
+        onShowMore={onShowMore}
+        onAddProduct={props.onAddProduct}
+      >
+        {response.categories.map((hit) => (
           <CategoryResult
-            key={`c${hit.category.id}`}
+            key={hit.category.id}
             hit={hit}
             label={label}
             onAddGeneric={props.onAddGeneric}
             onBrowse={props.onBrowse}
           />
         ))}
-        {products.map((product) => (
-          <ProductResult
-            key={product.ean}
-            product={product}
-            terms={terms}
-            onAdd={props.onAddProduct}
-          />
-        ))}
-      </ul>
-      <p className="search-note" aria-live="polite">
-        {note}
-      </p>
-      {canShowMore && (
-        <button type="button" className="search-results__more" onClick={onShowMore}>
-          Näytä lisää
-        </button>
-      )}
+      </ProductList>
     </section>
   );
 }
