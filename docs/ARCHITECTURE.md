@@ -156,7 +156,8 @@ Revisit only after submission, if the app is actually being used.
 │
 ├── scripts/
 │   ├── validate-data.ts     Zod schemas + graph integrity checks
-│   ├── build-data.ts        data/normalised/ + data/graph/ → data/build/, stamps version
+│   ├── build-data.ts        data/normalised/ + data/graph/ → data/build/, stamps version (planned)
+│   ├── build-search.ts      the search half of it: tiers, category data, aliases → data/build/core/
 │   └── seed-synthetic.ts    deterministic 50k-product / 400-node fixture (planned)
 │
 ├── .env.example             committed; VITE_DATA_SOURCE etc.
@@ -330,13 +331,15 @@ summarised in §17, but where the two differ, `types.ts` is authoritative.
    and the map work.
 4. `diff.ts` compares against the previous scrape and reports what moved, appeared,
    or disappeared. Stores rearrange; this is how you notice.
-5. `build-data.ts` **builds two FlexSearch indexes and exports them**, so the app never
-   constructs an index at startup: a **hot index** of the most popular products and a
-   **full index** of every searchable product, both ordered by popularity (§10). They
-   carry names and aliases only, with `{ ean, name }` as their payload, so a result can
-   be rendered without the display tier. It also writes **`category-top.json`**
-   (`categoryId → [ean, …]`, the top ~10 products of each category by popularity), so
-   generic matches can list popular SKUs without popularity being shipped (§6).
+5. `build-search.ts` (`pnpm data:search`, the search half of `build-data.ts`) **splits
+   the catalogue into three search tiers** (§10), each stored in rank order so the app
+   needs no index: `search-tier-{1,2,3}.json`, columnar `{ eans, names, categoryIds }`,
+   so a result can be rendered without the display tier. It also writes
+   **`category-top.json`** (`categoryId → [ean, …]`, the top 10 products of each
+   category subtree by popularity), so generic matches can list popular SKUs without
+   popularity being shipped (§6), and `category-rank.json`, which orders category
+   results. Every input and the output are validated first; nothing is written if a
+   check fails or the search files exceed 1 MB gzipped. Plan: `docs/plans/search.md`.
 6. Output is **split into core and display tiers** (§14) and written to `data/build/`,
    committed, so the app build is reproducible. `manifest.json` records the gzipped
    size of each chunk.
@@ -575,7 +578,7 @@ Client-side search keeps everything working offline.
 - **No index; a scan that stops early.** Each tier is stored in rank order, so the
   first 20 matches are the top 20 results and the scan stops there. A query reads each
   tier at most once per word. Measured at ~2 ms for a full pass over all 39k names on a
-  laptop, with no index to build or ship. FlexSearch or a trigram index comes back only
+  PC, with no index to build or ship. FlexSearch or a trigram index comes back only
   if the phone bench misses the §14 targets.
 - **No debounce, small renders.** Search runs on every keystroke and renders 20 results
   at a time, with "show more".
@@ -626,7 +629,7 @@ keyed on EAN. Search, list building, routing and the map therefore work with no
 network at all.
 
 **Degraded state, when core is present and display is not:** results and list entries
-render with the name from the search index and without brand or secondary-placement
+render with the name from the search tiers and without brand or secondary-placement
 information. Nothing is blocked and no route is affected. This is the only offline
 degradation in the app and it should be shown as a quiet inline note, not an error.
 
@@ -722,7 +725,7 @@ Monday. This outranks every checkbox below.
 - [ ] Full scrape reviewed by hand for junk, duplicates, missing shelves
 - [ ] Shelf IDs matched against `graph.json`; unmatched logged as errors, never dropped _(ready when: a real graph exists at any fidelity)_
 - [ ] `diff.ts` — compare scrapes, report moved / new / removed
-- [ ] `pnpm data:build` — versioned bundles, manifest, **core/display tier split**, hot and full search indexes and `category-top.json` prebuilt and exported
+- [ ] `pnpm data:build` — versioned bundles, manifest, **core/display tier split**; calls the search build (`pnpm data:search`, done: three search tiers, `category-top.json`, `category-rank.json`, aliases)
 - [ ] **Size measurement on real data**: run `data:build` over the partial real scrape as soon as one exists, record gzipped size per chunk and extrapolate to the full catalogue; use the synthetic fixture for scale beyond that. §14 budgets confirmed or adjusted once, before anyone builds against the bundle shape.
 - [ ] Frozen `data/e2e-fixture/` committed
 - [ ] `CategoryPlacement` (`categoryId → nodeId`) hand-maintained, shipped in the core tier — the only way generic entries resolve, and the fallback when a product's shelf ID is unmatched
@@ -849,11 +852,11 @@ the architecture is built around is the feature that breaks first on a real devi
 The catalogue is therefore **not one artefact**. It is split by what routing actually
 needs, and the split is enforced in CI rather than left to discipline.
 
-| Tier        | Contents                                                                                                                                     | Caching                                           | Budget (gzipped)      |
-| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | --------------------- |
-| **Core**    | walk graph, floorplan, categories, primary placements, category placements, category top SKUs, aliases, prebuilt hot and full search indexes | precached by the service worker; required offline | **3 MB, CI-enforced** |
-| **Display** | full product records, secondary placements                                                                                                   | lazy, stale-while-revalidate, IndexedDB           | unbudgeted            |
-| **Editor**  | map-editor assets                                                                                                                            | not cached at all                                 | n/a                   |
+| Tier        | Contents                                                                                                                                 | Caching                                           | Budget (gzipped)      |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | --------------------- |
+| **Core**    | walk graph, floorplan, categories, primary placements, category placements, category top SKUs and ranks, aliases, the three search tiers | precached by the service worker; required offline | **3 MB, CI-enforced** |
+| **Display** | full product records, secondary placements                                                                                               | lazy, stale-while-revalidate, IndexedDB           | unbudgeted            |
+| **Editor**  | map-editor assets                                                                                                                        | not cached at all                                 | n/a                   |
 
 Core is everything needed to search a query, resolve a list and compute a route. If
 core is present, the app is fully functional offline. Display affects only how richly a
@@ -873,25 +876,27 @@ starting budget to be confirmed or adjusted against that measurement, once, earl
 - Primary placements ship as a flat `EAN → { nodeId, categoryId }` map, separate from
   the richer `Placement` records. The `categoryId` is there so the frozen-last
   constraint can be applied without the display tier.
-- The search indexes carry names and aliases only, with `{ ean, name }` as their
-  payload. The hot index is a subset of the full one, so it adds little.
+- The search tiers carry names, EANs and category ids only, as columns, and split the
+  catalogue rather than repeat it. All search files together are **896 KB gzipped**
+  (2026-10-04 scrape), and `build-search.ts` fails above 1 MB, the search share of
+  this budget.
 
 **Escape hatches, in the order they should be reached for**, if measurement shows core
 over budget:
 
-1. Prune stopwords and shorten the tokenizer's n-gram range in the index.
-2. Index at category granularity and linear-scan within the matched category. A few
-   hundred rows is well inside the 50 ms search target.
-3. Only then move the **full** index out of the precache: fetched in the background
-   after the first load and cached for later visits and offline use. The hot index stays
+1. Drop words from tier names that no shopper searches for (sizes, packaging codes).
+2. Drop `categoryIds` from tier 3 and resolve its category page through
+   `placements-primary.json` instead.
+3. Only then move **tier 3** out of the precache: fetched in the background after the
+   first load and cached for later visits and offline use. Tiers 1 and 2 stay
    precached, so common searches remain instant and offline. Raising the budget
    instead is a legitimate choice, since speed matters more than size (§10), but it is a
    §17 decision, not a quiet CI change. Taking this hatch also requires a "full
    catalogue not downloaded yet" state among §11's loading, empty and error states, and
    a matching change to the E2E offline test, since §10 currently promises no such state.
 
-Shrink the index before shrinking the data, and shrink the data before weakening
-offline. **Do not resolve this by dropping the offline requirement**: a network
+Shrink the search data before shrinking the catalogue, and shrink the catalogue before
+weakening offline. **Do not resolve this by dropping the offline requirement**: a network
 dependency inside a steel-and-concrete retail building fails exactly where the app is
 used, and it would move a one-time download cost onto every session rather than
 removing it.
@@ -934,14 +939,14 @@ before the first bulk mapping session, not after.
 ### Performance targets
 
 Set numbers rather than assuming, and test on the **oldest phone in the team**, not a
-laptop:
+development PC:
 
 - **Keystroke to results visible under 50 ms**
 - Route computation under 500 ms for a 20-item list
 - Map interaction at 60 fps while panning
-- **App open to first usable search (hot index) under 500 ms**, warm cache, on that
-  phone. This is the target the hot index and the prebuilt indexes exist to hit; fast
-  queries are meaningless if the index takes seconds to become available.
+- **App open to first usable search (tier 1) under 500 ms**, warm cache, on that
+  phone. This is the target tier 1 (149 KB gzipped) exists to hit; fast queries are
+  meaningless if the data takes seconds to become available.
 - **"maito" shows a milk as the first result within 1–3 keystrokes**
 - **Core tier under 3 MB gzipped**, enforced in CI rather than checked by hand
 
@@ -1012,9 +1017,10 @@ that does not exist, and no amount of React testing catches that.
   warning. A warning gets merged. This is the check that keeps the offline requirement
   and the catalogue size from quietly diverging over six contributors and eight weeks.
 - No display-tier field appears in a core-tier chunk (schema separation holds)
-- Every EAN in the hot index is also in the full index, and every searchable product is
-  in the full index
-- Every EAN in `category-top.json` exists in the full index
+- Every searchable product is in exactly one search tier; tiers 1–2 hold no unranked,
+  clothing or uncategorised product; each tier is in rank order (`build-search.ts` runs
+  these before writing)
+- Every EAN in `category-top.json` exists in a search tier
 
 The connectivity check alone catches most map-editor mistakes in minutes, instead of
 during the store walk.
@@ -1039,7 +1045,7 @@ during the store walk.
   correct pin count → check off item → current leg advances
 - **Single-item lookup** — search → result → map pin
 - **Offline** — load app, set browser context offline, verify search and routing still
-  work, including a product that is only in the full index, not the hot one. Offline is
+  work, including a product that is only in tier 3. Offline is
   a headline design decision, so it should be verified rather than assumed.
 - **Share link** — encode list to URL, load in a fresh context, verify restoration
 
