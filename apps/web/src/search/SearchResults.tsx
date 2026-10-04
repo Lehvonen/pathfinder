@@ -39,10 +39,16 @@ function SearchResults(props: SearchResultsProps) {
     );
   }
 
-  const label = response.query.trim();
+  // After a typo correction the results, and a generic entry's label, are for the fix.
+  const label = response.corrected?.to ?? response.query.trim();
 
   return (
     <section aria-label="Hakutulokset">
+      {response.corrected && (
+        <p className="search-note" aria-live="polite">
+          Näytetään tulokset haulle <strong>"{response.corrected.to}"</strong>
+        </p>
+      )}
       <ProductList
         response={response}
         emptyText={`Ei tuloksia haulle "${label}".`}

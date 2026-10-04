@@ -1,7 +1,7 @@
 // Acceptance tests on the real Kupittaa catalogue (docs/plans/search.md §8). They read
 // the committed output of `pnpm data:search`, so they change when the data does: run
 // with `pnpm search:golden`, never as part of CI.
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createSearchEngine } from './engine';
 import { fold } from './normalise';
 import type { SearchResponse, TierData } from './types';
@@ -22,6 +22,8 @@ const engine = createSearchEngine({
   yieldFn: async () => {},
 });
 for (const tier of [1, 2, 3]) await engine.addTier(await read<TierData>(`search-tier-${tier}`));
+// Three tiers, then the typo vocabulary the engine builds once they are all in.
+await vi.waitFor(() => expect(engine.getVersion()).toBe(4));
 
 const search = (raw: string) => engine.search(raw + ' ');
 const names = (r: SearchResponse) => r.products.map((p) => fold(p.name));
@@ -108,6 +110,23 @@ describe('aliases', () => {
 
   it('kalja finds beer', () => {
     expect(categoryNames(search('kalja'))[0]).toBe('Oluet');
+  });
+});
+
+describe('typo correction', () => {
+  it.each([
+    ['maiot', 'maito', /maito/],
+    ['jauhelha', 'jauheliha', /jauheliha/],
+    ['kahvli', 'kahvi', /kahvi/],
+    ['banaanni', 'banaani', /banaani/],
+  ])('%s is searched as %s', (typed, fixed, firstName) => {
+    const r = search(typed);
+    expect(r.corrected?.to).toBe(fixed);
+    expect(first(r)).toMatch(firstName);
+  });
+
+  it('does not correct a word that already finds products', () => {
+    expect(search('jogurtt').corrected).toBeUndefined();
   });
 });
 
