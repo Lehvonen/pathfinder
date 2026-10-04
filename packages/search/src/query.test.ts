@@ -69,6 +69,14 @@ describe('parseQuery aliases', () => {
     expect(terms(parse('vessap'))).toEqual(['vessap', 'wc paperi', 'talouspaperi']);
   });
 
+  it('uses only its own alias when a word being typed has one, ignoring longer keys', () => {
+    // "kana" is chicken; "kananmuna" starting with it must not bring eggs in while typing
+    const using = prepareAliases({ kana: ['broileri', 'kanaa'], kananmuna: ['munia'] });
+    expect(terms(parse('kana', using))).toEqual(['broileri', 'kanaa']);
+    expect(terms(parse('kana ', using))).toEqual(['broileri', 'kanaa']);
+    expect(terms(parse('kanan', using))).toEqual(['kanan', 'munia']);
+  });
+
   it('does not add prefix aliases to a word of 3 letters', () => {
     expect(terms(parse('ves'))).toEqual(['ves']);
   });

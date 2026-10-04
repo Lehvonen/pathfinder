@@ -61,10 +61,14 @@ export function parseQuery(raw: string, aliases: PreparedAliases): ParsedQuery {
   };
 }
 
-/** The terms a word stands for: its exact alias (which replaces it) or itself, plus
- * the aliases of longer keys it is a prefix of, while it is being typed. */
+/** The terms a word stands for: its exact alias, which replaces it; otherwise itself,
+ * plus the aliases of longer keys it is a prefix of, while it is being typed. A word with
+ * its own alias means that alias from the first keystroke: "kana" is chicken, not the
+ * start of "kananmuna", so the results do not change when the space is typed. */
 function expand(word: string, isTyping: boolean, aliases: PreparedAliases): string[] {
-  const terms = [...(aliases.get(word) ?? [word])];
+  const exact = aliases.get(word);
+  if (exact) return [...new Set(exact)];
+  const terms = [word];
   if (isTyping && word.length >= ALIAS_PREFIX_MIN_LENGTH) {
     for (const [key, keyTerms] of aliases) {
       if (key !== word && key.startsWith(word)) terms.push(...keyTerms);
