@@ -11,6 +11,7 @@
     "build": "pnpm -r build",
     "data:search": "tsx scripts/build-search.ts",
     "search:golden": "pnpm --filter @pathfinder/search exec vitest run --config vitest.golden.config.ts",
+    "bench:search": "tsx scripts/bench-search.ts",
     "prepare": "husky"
   },
   "lint-staged": {
