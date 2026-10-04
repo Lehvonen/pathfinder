@@ -13,6 +13,8 @@ export type BuildOutput = {
   categoryTop: CategoryTop;
   /** Top-level category ids that must never be in tiers 1–2. */
   excluded: readonly number[];
+  /** Food top-level category ids: tier 2 lists all of its food before any non-food. */
+  food: readonly number[];
 };
 
 /**
@@ -25,6 +27,10 @@ export function validateBuild(output: BuildOutput): string[] {
   const categoryIds = new Set(categories.map((c) => c.id));
   const topLevelOf = topLevels(categories);
   const excluded = new Set(output.excluded);
+  const food = new Set(output.food);
+  // Tier 2 is two runs, food then non-food, each in rank order; tiers 1 and 3 are one run.
+  const runOf = (tier: TierNumber, product: TierProduct) =>
+    tier === 2 && !food.has(topLevelOf(product.categoryId)) ? 1 : 0;
 
   const tierOf = new Map<string, TierNumber>();
   for (const tier of [1, 2, 3] as const) {
@@ -42,8 +48,12 @@ export function validateBuild(output: BuildOutput): string[] {
         problems.push(`${where} is in excluded category ${topLevelOf(product.categoryId)}`);
       }
       const previous = list[i - 1];
-      if (previous && compareProductRank(previous, product) > 0) {
-        problems.push(`${where} is out of rank order`);
+      if (previous) {
+        const [before, now] = [runOf(tier, previous), runOf(tier, product)];
+        if (before > now) problems.push(`${where} is food after a non-food product`);
+        else if (before === now && compareProductRank(previous, product) > 0) {
+          problems.push(`${where} is out of rank order`);
+        }
       }
     });
   }

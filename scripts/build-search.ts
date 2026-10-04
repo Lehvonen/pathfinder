@@ -91,6 +91,7 @@ check(
     categories,
     categoryTop: top,
     excluded: TIER_OPTIONS.excluded,
+    food: TIER_OPTIONS.food,
   }),
 );
 

@@ -9,10 +9,11 @@ import {
   type BuildOutput,
 } from './validate';
 
-// 10 food (11 is a leaf under it), 50 excluded
+// 10 food (11 is a leaf under it), 30 other, 50 excluded
 const categories: Category[] = [
   { id: 10, name: 'Ruoka', temperature: 'ambient' },
   { id: 11, name: 'Maidot', temperature: 'chilled', parentId: 10 },
+  { id: 30, name: 'Kodinhoito', temperature: 'ambient' },
   { id: 50, name: 'Vaatteet', temperature: 'ambient' },
 ];
 const p = (ean: string, categoryId: number, popularity: number | null): TierProduct => ({
@@ -33,6 +34,7 @@ const valid = (): BuildOutput => ({
   categories,
   categoryTop: { 10: ['1', '2', '4'], 11: ['1'], 50: ['3'] },
   excluded: [50],
+  food: [10],
 });
 
 describe('validateBuild', () => {
@@ -62,6 +64,36 @@ describe('validateBuild', () => {
   it('reports an excluded category in tier 1 or 2, through its top level', () => {
     const output = { ...valid(), tiers: { 1: [sock, milk], 2: [bread], 3: [unranked] } };
     expect(validateBuild(output)).toEqual(['tier 1: 3 is in excluded category 50']);
+  });
+
+  it('accepts tier 2 as food, then non-food, even when non-food is more popular', () => {
+    const soap = p('6', 30, 999);
+    const output = {
+      ...valid(),
+      products: [...valid().products, soap],
+      tiers: { 1: [milk], 2: [bread, soap], 3: [sock, unranked] },
+    };
+    expect(validateBuild(output)).toEqual([]);
+  });
+
+  it('reports food after a non-food product in tier 2', () => {
+    const soap = p('6', 30, 999);
+    const output = {
+      ...valid(),
+      products: [...valid().products, soap],
+      tiers: { 1: [milk], 2: [soap, bread], 3: [sock, unranked] },
+    };
+    expect(validateBuild(output)).toEqual(['tier 2: 2 is food after a non-food product']);
+  });
+
+  it('reports the non-food run of tier 2 out of rank order', () => {
+    const [soap, mop] = [p('6', 30, 5), p('7', 30, 80)];
+    const output = {
+      ...valid(),
+      products: [...valid().products, soap, mop],
+      tiers: { 1: [milk], 2: [bread, soap, mop], 3: [sock, unranked] },
+    };
+    expect(validateBuild(output)).toEqual(['tier 2: 7 is out of rank order']);
   });
 
   it('reports a tier out of rank order', () => {
