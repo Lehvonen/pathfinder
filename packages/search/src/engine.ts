@@ -122,7 +122,11 @@ export function createSearchEngine(input: SearchEngineInput): SearchEngine {
     ...found,
     pendingTiers: pendingTiers(),
     terms: query.slots.flatMap((slot) =>
-      slot.alternatives.map(({ term, mode }) => ({ term, wordStart: mode === 'word-start' })),
+      slot.alternatives.map(({ term, mode }) => ({
+        term,
+        wordStart: mode !== 'anywhere',
+        ...(mode === 'whole-word' && { wholeWord: true }),
+      })),
     ),
   });
 

@@ -144,6 +144,22 @@ describe('match terms', () => {
   });
 });
 
+describe('whole-word match terms', () => {
+  it('marks whole-word alias terms so highlighting can respect them', async () => {
+    const engine = createSearchEngine({
+      categories,
+      categoryTop,
+      categoryRank,
+      aliases: { maito: ['maito', '=maidot'] },
+      yieldFn: noYield,
+    });
+    expect(engine.search('maito ').terms).toEqual([
+      { term: 'maito', wordStart: false },
+      { term: 'maidot', wordStart: true, wholeWord: true },
+    ]);
+  });
+});
+
 describe('category results', () => {
   it('lists matching categories with example products from loaded tiers', async () => {
     const r = (await engineWith(1)).search('maito');

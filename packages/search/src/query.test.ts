@@ -155,3 +155,39 @@ describe('parseQuery exclusions', () => {
     expect(prepareAliases({ wc: ['-', '- /', 'ok'] }).get('wc')).toEqual(['ok']);
   });
 });
+
+describe('parseQuery whole-word terms', () => {
+  const custom = (a: Aliases) => prepareAliases(a);
+  /** The alternatives besides the dummy word "xq" itself, which every alias now keeps. */
+  const aliasTerms = (q: ParsedQuery) => terms(q).filter((term) => term !== 'xq');
+
+  it('turns an alias term written =word into a whole-word alternative', () => {
+    expect(parse('maito ', custom({ maito: ['maito', '=Maidöt'] })).slots[0]!.alternatives).toEqual(
+      [
+        { term: 'maito', mode: 'anywhere', needle: 'maito' },
+        { term: 'maidot', mode: 'whole-word', needle: ' maidot ' },
+      ],
+    );
+  });
+
+  it('drops a term that is only the marker', () => {
+    expect([...prepareAliases({ x: ['=', '= -', 'ok'] })]).toEqual([['x', ['ok']]]);
+  });
+
+  it('drops a whole-word term that an anywhere or word-start term already covers', () => {
+    expect(aliasTerms(parse('xq ', custom({ xq: ['maidot', '=maidot'] })))).toEqual(['maidot']);
+    expect(aliasTerms(parse('xq ', custom({ xq: ['ma', '=maidot'] })))).toEqual(['ma']);
+  });
+
+  it('keeps an anywhere term even when a whole-word term matches the same text', () => {
+    // =maidot matches only "maidot"; maidottomat must still match the anywhere term
+    expect(aliasTerms(parse('xq ', custom({ xq: ['=maidot', 'maidottomat'] })))).toEqual([
+      'maidot',
+      'maidottomat',
+    ]);
+  });
+
+  it('drops a whole-word phrase that a whole-word word inside it covers', () => {
+    expect(aliasTerms(parse('xq ', custom({ xq: ['=maidot', '=maidot ja'] })))).toEqual(['maidot']);
+  });
+});

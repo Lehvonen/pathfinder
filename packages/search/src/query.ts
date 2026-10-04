@@ -13,13 +13,16 @@ export const CATEGORY_MIN_LENGTH = 3;
 /** An alias term starting with this excludes products containing the rest: `kana` with
  * `-muna` finds chicken but not "kanan munia" (eggs). */
 export const EXCLUDE = '-';
+/** An alias term starting with this matches whole words only: `=maidot` finds "Maidot"
+ * but not "Maidottomat" (dairy-free). */
+export const WHOLE_WORD = '=';
 
-export type MatchMode = 'word-start' | 'anywhere';
+export type MatchMode = 'word-start' | 'anywhere' | 'whole-word';
 
 export type Alternative = {
   term: string;
   mode: MatchMode;
-  /** What to `indexOf` in a haystack: `" " + term` for word-start, `term` otherwise. */
+  /** `" " + term` for word-start, `" " + term + " "` for whole-word, `term` otherwise. */
   needle: string;
 };
 
@@ -49,11 +52,12 @@ export function prepareAliases(aliases: Aliases): PreparedAliases {
   return prepared;
 }
 
-/** Folds a term, keeping the exclude marker in front; '' when nothing is left. */
+/** Folds a term, keeping its marker (`-` exclude, `=` whole word) in front; '' when
+ * nothing is left. */
 function prepareTerm(term: string): string {
-  if (!term.startsWith(EXCLUDE)) return fold(term);
-  const folded = fold(term.slice(EXCLUDE.length));
-  return folded === '' ? '' : EXCLUDE + folded;
+  const marker = [EXCLUDE, WHOLE_WORD].find((m) => term.startsWith(m)) ?? '';
+  const folded = fold(term.slice(marker.length));
+  return folded === '' ? '' : marker + folded;
 }
 
 /** Turns what the shopper typed into slots (docs/plans/search.md §5.2–5.3). */
@@ -97,6 +101,10 @@ function expand(word: string, isTyping: boolean, aliases: PreparedAliases): stri
 }
 
 function toAlternative(term: string): Alternative {
+  if (term.startsWith(WHOLE_WORD)) {
+    const word = term.slice(WHOLE_WORD.length);
+    return { term: word, mode: 'whole-word', needle: ' ' + word + ' ' };
+  }
   const mode: MatchMode = term.length <= WORD_START_MAX_LENGTH ? 'word-start' : 'anywhere';
   return { term, mode, needle: mode === 'word-start' ? ' ' + term : term };
 }
@@ -110,6 +118,8 @@ function subsume(alternatives: Alternative[]): Alternative[] {
 /** Whether every item `a` matches is also matched by `b`. */
 function covers(b: Alternative, a: Alternative): boolean {
   if (b.mode === 'anywhere') return a.term.includes(b.term);
-  // A word-start match of `b` needs " b" in the item; " a" must contain it.
-  return a.mode === 'word-start' && a.needle.includes(b.needle);
+  // A word-start match of `b` needs " b" in the item; a's needle must contain it. A
+  // whole-word `b` needs " b " too, so only a whole-word `a` can contain that.
+  if (b.mode === 'word-start') return a.mode !== 'anywhere' && a.needle.includes(b.needle);
+  return a.mode === 'whole-word' && a.needle.includes(b.needle);
 }

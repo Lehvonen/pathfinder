@@ -1,5 +1,5 @@
 import { itemAt, type Haystack } from './haystack';
-import type { ParsedQuery } from './query';
+import type { MatchMode, ParsedQuery } from './query';
 
 export type ScanResult = {
   /** Matching item indexes, in haystack order, which is rank order. */
@@ -8,9 +8,10 @@ export type ScanResult = {
   next: number | null;
 };
 
-type Cursor = { term: string; wordStart: boolean; item: number };
+type Cursor = { term: string; mode: MatchMode; item: number };
 
 const SPACE = 32;
+const NEWLINE = 10;
 
 /**
  * Finds the first `limit` items from `from` that match every slot of `query`
@@ -35,21 +36,23 @@ export function scan(
 ): ScanResult {
   const { text, starts } = haystack;
   const slots: Cursor[][] = query.slots.map((slot) =>
-    slot.alternatives.map(({ term, mode }) => ({
-      term,
-      wordStart: mode === 'word-start',
-      item: -1,
-    })),
+    slot.alternatives.map(({ term, mode }) => ({ term, mode, item: -1 })),
   );
   const seek = (cursor: Cursor, fromItem: number) => {
     const start = starts[fromItem]!; // the item's leading space
-    let position = text.indexOf(cursor.term, cursor.wordStart ? start + 1 : start);
-    // A word-start match needs a space before it. Searching for " " + term would stop at
-    // every space in the text, the commonest character; the term itself is far rarer, so
-    // a short word that matches nothing costs ~0.05 ms instead of ~2 ms.
-    while (cursor.wordStart && position !== -1 && text.charCodeAt(position - 1) !== SPACE) {
-      position = text.indexOf(cursor.term, position + 1);
-    }
+    const { term, mode } = cursor;
+    let position = text.indexOf(term, mode === 'anywhere' ? start : start + 1);
+    // A word-start match needs a space before it, a whole-word match also a space or the
+    // item's end after it. Searching for " " + term would stop at every space in the text,
+    // the commonest character; the term itself is far rarer, so a short word that matches
+    // nothing costs ~0.05 ms instead of ~2 ms.
+    const misses = (at: number) => {
+      if (mode === 'anywhere') return false;
+      if (text.charCodeAt(at - 1) !== SPACE) return true;
+      const after = text.charCodeAt(at + term.length);
+      return mode === 'whole-word' && after !== SPACE && after !== NEWLINE;
+    };
+    while (position !== -1 && misses(position)) position = text.indexOf(term, position + 1);
     cursor.item = position === -1 ? Infinity : itemAt(haystack, position);
   };
 

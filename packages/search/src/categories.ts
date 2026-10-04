@@ -17,8 +17,10 @@ export type CategoryIndex = {
 type Entry = {
   category: Category;
   folded: string;
-  /** `" " + folded`, so a word-start check is one `includes`; built once, not per keystroke. */
+  /** `" " + folded` and `" " + folded + " "`, so word-start and whole-word checks are one
+   * `includes` each; built once, not per keystroke. */
   spaced: string;
+  padded: string;
   ancestors: number[];
   rank: number;
 };
@@ -46,6 +48,7 @@ export function createCategoryIndex(
       category: c,
       folded: fold(c.name),
       spaced: ' ' + fold(c.name),
+      padded: ' ' + fold(c.name) + ' ',
       ancestors: ancestors(c),
       rank: categoryRank[c.id]!,
     }));
@@ -96,7 +99,7 @@ export function createCategoryIndex(
 /** A query's alternatives in the form the name check needs, built once per keystroke. */
 type QueryTerms = {
   phrase: string;
-  slots: { needle: string; inSpaced: boolean; atWordStart: string; term: string }[][];
+  slots: { needle: string; mode: Alternative['mode']; atWordStart: string; term: string }[][];
 };
 
 function prepareTerms(query: ParsedQuery): QueryTerms {
@@ -105,7 +108,7 @@ function prepareTerms(query: ParsedQuery): QueryTerms {
     slots: query.slots.map((s) =>
       s.alternatives.map((a: Alternative) => ({
         needle: a.needle,
-        inSpaced: a.mode === 'word-start',
+        mode: a.mode,
         atWordStart: ' ' + a.term,
         term: a.term,
       })),
@@ -117,10 +120,9 @@ function prepareTerms(query: ParsedQuery): QueryTerms {
  * 3: the name is exactly the query (or, for one word, exactly one of its aliases);
  * 2: every word matches at a word start; 1: every word matches; 0: no match.
  */
-function scoreName({ folded, spaced }: Entry, { phrase, slots }: QueryTerms): number {
-  const matches = slots.every((alts) =>
-    alts.some((a) => (a.inSpaced ? spaced : folded).includes(a.needle)),
-  );
+function scoreName({ folded, spaced, padded }: Entry, { phrase, slots }: QueryTerms): number {
+  const text = { anywhere: folded, 'word-start': spaced, 'whole-word': padded };
+  const matches = slots.every((alts) => alts.some((a) => text[a.mode].includes(a.needle)));
   if (!matches) return 0;
   const exact =
     folded === phrase || (slots.length === 1 && slots[0]!.some((a) => a.term === folded));
