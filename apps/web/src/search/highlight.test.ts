@@ -28,6 +28,13 @@ describe('highlightRanges', () => {
     expect(lit(name, [anywhere('maito'), wordStart('l')])).toEqual(['l', 'maito']);
   });
 
+  it('lights up a whole-word term only where it is the whole word', () => {
+    const wholeWord: MatchTerm = { term: 'maidot', wordStart: true, wholeWord: true };
+    expect(lit('Maidot ja maidottomat jogurtit', [wholeWord])).toEqual(['Maidot']);
+    expect(lit('Valio maidot', [wholeWord])).toEqual(['maidot']);
+    expect(lit('kevytmaidot 1l', [wholeWord])).toEqual([]);
+  });
+
   it('finds every occurrence, and merges terms that overlap or touch', () => {
     expect(lit('maito ja maito', [anywhere('maito')])).toEqual(['maito', 'maito']);
     expect(lit('kevytmaito', [anywhere('kevyt'), anywhere('ytmai')])).toEqual(['kevytmai']);

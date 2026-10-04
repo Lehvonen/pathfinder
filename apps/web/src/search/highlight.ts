@@ -16,10 +16,12 @@ const COMBINING_MARK = /\p{M}/u;
 export function highlightRanges(name: string, terms: readonly MatchTerm[]): Range[] {
   const { folded, origin } = foldWithOffsets(name);
   const hits: Range[] = [];
-  for (const { term, wordStart } of terms) {
+  for (const { term, wordStart, wholeWord } of terms) {
     for (let at = folded.indexOf(term); at !== -1; at = folded.indexOf(term, at + 1)) {
+      const end = at + term.length;
       if (wordStart && at > 0 && folded[at - 1] !== ' ') continue;
-      hits.push([at, at + term.length]);
+      if (wholeWord && end < folded.length && folded[end] !== ' ') continue;
+      hits.push([at, end]);
     }
   }
   hits.sort((a, b) => a[0] - b[0]);
