@@ -39,7 +39,13 @@ export type CategoryHit = {
 };
 
 /** A folded term the query matched, for highlighting it in a product name. */
-export type MatchTerm = { term: string; wordStart: boolean };
+export type MatchTerm = {
+  term: string;
+  /** Matches only where a word starts. */
+  wordStart: boolean;
+  /** Matches only a whole word (an alias term written `=word`); implies `wordStart`. */
+  wholeWord?: boolean;
+};
 
 /** Where "show more" continues: the next index to scan in `tier`. */
 export type Cursor = { tier: TierNumber; next: number };

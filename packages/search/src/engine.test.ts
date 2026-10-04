@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createSearchEngine, type SearchEngine } from './engine';
+import { createSearchEngine, FEW_RESULTS, type SearchEngine } from './engine';
 import { aliases, categories, categoryRank, categoryTop, ean, tiers } from './fixtures';
-import type { SearchResponse, TierNumber } from './types';
+import type { SearchResponse, TierData, TierNumber } from './types';
 
 const noYield = async () => {};
 
@@ -144,6 +144,22 @@ describe('match terms', () => {
   });
 });
 
+describe('whole-word match terms', () => {
+  it('marks whole-word alias terms so highlighting can respect them', async () => {
+    const engine = createSearchEngine({
+      categories,
+      categoryTop,
+      categoryRank,
+      aliases: { maito: ['maito', '=maidot'] },
+      yieldFn: noYield,
+    });
+    expect(engine.search('maito ').terms).toEqual([
+      { term: 'maito', wordStart: false },
+      { term: 'maidot', wordStart: true, wholeWord: true },
+    ]);
+  });
+});
+
 describe('category results', () => {
   it('lists matching categories with example products from loaded tiers', async () => {
     const r = (await engineWith(1)).search('maito');
@@ -204,6 +220,85 @@ describe('subcategories', () => {
     const engine = await engineWith();
     expect(engine.subcategories(2).map((c) => c.name)).toEqual(['Maidot', 'Juustot']);
     expect(engine.subcategories(10)).toEqual([]);
+  });
+});
+
+describe('typo correction', () => {
+  /** An engine with every tier in and the typo vocabulary built. */
+  async function readyEngine() {
+    const engine = await engineWith(1, 2, 3);
+    await vi.waitFor(() => expect(engine.getVersion()).toBe(4));
+    return engine;
+  }
+
+  it('retries a word one edit away and says what it searched for instead', async () => {
+    const r = (await readyEngine()).search('kevytmatio ');
+    expect(eans(r)).toEqual(nums(2, 3, 13)); // kevytmaito, kevytmaitojuoma, kevytmaito
+    expect(r.corrected).toEqual({ from: 'kevytmatio', to: 'kevytmaito' });
+    expect(r.query).toBe('kevytmatio ');
+  });
+
+  it('reports when typo correction is ready: every tier in, vocabulary built', async () => {
+    const engine = await engineWith(1, 2);
+    expect(engine.typoReady()).toBe(false);
+    await engine.addTier(tiers[3]);
+    await vi.waitFor(() => expect(engine.typoReady()).toBe(true));
+  });
+
+  it('does nothing before every tier and the vocabulary are in', async () => {
+    const r = (await engineWith(1, 2)).search('kevytmatio');
+    expect(r.products).toEqual([]);
+    expect(r.corrected).toBeUndefined();
+  });
+
+  it('leaves words of 4 letters alone and corrects words of 5', async () => {
+    const engine = await readyEngine();
+    expect(engine.search('maio').corrected).toBeUndefined();
+    expect(engine.search('maiot').corrected).toEqual({ from: 'maiot', to: 'maito' });
+  });
+
+  it('keeps the original when the retry finds no more', async () => {
+    // kevytmatio → kevytmaito, but "zzzzzz" still matches nothing
+    expect((await readyEngine()).search('kevytmatio zzzzzz').corrected).toBeUndefined();
+  });
+
+  describe(`only when fewer than ${FEW_RESULTS} products and no categories`, () => {
+    /** "kahvin" is inside `filters` names; "kahvia" (one edit away) in 10 more. */
+    async function coffeeEngine(filters: number, categoryName = 'Kahvit') {
+      const names = [
+        ...Array.from({ length: filters }, (_, i) => `Paulig kahvinsuodatin ${i}`),
+        ...Array.from({ length: 10 }, (_, i) => `Juhla kahvia ${i}`),
+      ];
+      const tier = (n: TierNumber, list: string[]): TierData => ({
+        version: 1,
+        tier: n,
+        eans: list.map((_, i) => `${n}${i}`),
+        names: list,
+        categoryIds: list.map(() => 1),
+      });
+      const engine = createSearchEngine({
+        categories: [{ id: 1, name: categoryName, temperature: 'ambient' }],
+        categoryTop: {},
+        categoryRank: { 1: 0 },
+        aliases: {},
+        yieldFn: noYield,
+      });
+      await engine.addTier(tier(1, names));
+      await engine.addTier(tier(2, []));
+      await engine.addTier(tier(3, []));
+      await vi.waitFor(() => expect(engine.getVersion()).toBe(4));
+      return engine;
+    }
+
+    it(`corrects at ${FEW_RESULTS - 1} products and not at ${FEW_RESULTS}`, async () => {
+      expect((await coffeeEngine(FEW_RESULTS - 1)).search('kahvin ').corrected?.to).toBe('kahvia');
+      expect((await coffeeEngine(FEW_RESULTS)).search('kahvin ').corrected).toBeUndefined();
+    });
+
+    it('does not correct when a category matched', async () => {
+      const engine = await coffeeEngine(1, 'Kahvinsuodattimet');
+      expect(engine.search('kahvin ').corrected).toBeUndefined();
+    });
   });
 });
 

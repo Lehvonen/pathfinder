@@ -1,7 +1,7 @@
 // Acceptance tests on the real Kupittaa catalogue (docs/plans/search.md §8). They read
 // the committed output of `pnpm data:search`, so they change when the data does: run
 // with `pnpm search:golden`, never as part of CI.
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createSearchEngine } from './engine';
 import { fold } from './normalise';
 import type { SearchResponse, TierData } from './types';
@@ -22,6 +22,8 @@ const engine = createSearchEngine({
   yieldFn: async () => {},
 });
 for (const tier of [1, 2, 3]) await engine.addTier(await read<TierData>(`search-tier-${tier}`));
+// Three tiers, then the typo vocabulary the engine builds once they are all in.
+await vi.waitFor(() => expect(engine.getVersion()).toBe(4));
 
 const search = (raw: string) => engine.search(raw + ' ');
 const names = (r: SearchResponse) => r.products.map((p) => fold(p.name));
@@ -41,17 +43,30 @@ describe('the §14 target: milk first', () => {
     expect(r.categories[0]!.topProducts[0]?.name).toMatch(/maito/);
     expect(r.categories.every((c) => c.category.parentId !== undefined)).toBe(true);
   });
+
+  it('maito: nothing dairy-free (the alias term =maidot matches the whole word only)', () => {
+    const r = engine.search('maito ', 1000);
+    expect(categoryNames(r)).not.toContain('Maidottomat jogurtit');
+    expect(names(r).filter((name) => /maidoton|maidottom/.test(name))).toEqual([]);
+  });
 });
 
 describe('Finnish compounds and folding', () => {
   it('leipä: bread first (leipä ends the word), and a bread category', () => {
     const r = search('leipä');
-    expect(first(r)).toMatch(/leipa( |$)/);
+    expect(first(r)).toMatch(/leipä( |$)/);
     expect(categoryNames(r)).toContain('Leivät');
   });
 
-  it('leipa and leipä give identical results', () => {
-    expect(search('leipa').products).toEqual(search('leipä').products);
+  it('nakki never finds näkkileipä: å, ä and ö are letters of their own', () => {
+    const r = engine.search('nakki ', 1000);
+    expect(r.products.length).toBeGreaterThan(0);
+    expect(names(r).filter((name) => name.includes('näkki'))).toEqual([]);
+    expect(search('näkkileipä').products.length).toBeGreaterThan(0);
+  });
+
+  it('leipa (no ä) finds nothing itself, so typo correction offers leipä, labelled', () => {
+    expect(search('leipa').corrected).toEqual({ from: 'leipa', to: 'leipä' });
   });
 
   it('juusto: no top-level category', () => {
@@ -108,6 +123,23 @@ describe('aliases', () => {
 
   it('kalja finds beer', () => {
     expect(categoryNames(search('kalja'))[0]).toBe('Oluet');
+  });
+});
+
+describe('typo correction', () => {
+  it.each([
+    ['maiot', 'maito', /maito/],
+    ['jauhelha', 'jauheliha', /jauheliha/],
+    ['kahvli', 'kahvi', /kahvi/],
+    ['banaanni', 'banaani', /banaani/],
+  ])('%s is searched as %s', (typed, fixed, firstName) => {
+    const r = search(typed);
+    expect(r.corrected?.to).toBe(fixed);
+    expect(first(r)).toMatch(firstName);
+  });
+
+  it('does not correct a word that already finds products', () => {
+    expect(search('jogurtt').corrected).toBeUndefined();
   });
 });
 

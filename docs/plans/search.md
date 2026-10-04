@@ -1,7 +1,8 @@
 # Plan: search engine
 
-**Status:** steps 1–6 built (engine, categories, tiers, build); PC numbers in §10. Web app,
-phone measurement and typo tolerance (steps 7–9) to do
+**Status:** steps 1–7 and 9 built (engine, categories, tiers, build, web app, category page,
+typo correction); PC numbers in §10. **Not done: the phone measurement (step 8), deferred to a
+later date (§11).**
 **Architecture refs:** §6 (generic entries, popularity), §7 step 5 (search build),
 §10 (search), §11 (frontend), §14 (budget, performance targets), §17 (search decisions)
 **Covers checklist items:** Track E, except "Single-item lookup → map pin" (needs the map)
@@ -143,21 +144,43 @@ query ──► normalise ──► aliases ──► match ──► rank ─�
 ```
 
 1. **Normalise**, applied identically to names and queries: remove zero-width
-   characters, decompose accents and drop them (`crème` → `creme`, `ä` → `a`, `ö` → `o`,
-   plus `ø`, `æ`, `ß`, which do not decompose), lowercase, turn every other character into
-   a space (`wc-paperi` → `wc paperi`), collapse spaces. `leipa` and `leipä` are the same
-   query; there is **no** extra score for typing the ä, because any boost would break the
-   pre-sorted order the scan relies on.
+   characters, lowercase, decompose accents and drop them (`crème` → `creme`, plus `ø`,
+   `æ`, `ß`, which do not decompose), turn every other character into a space
+   (`wc-paperi` → `wc paperi`), collapse spaces. **å, ä and ö are kept as letters of their
+   own** (decided 2026-10-04): `nakki` (sausage) must never find `näkkileipä`
+   (crispbread), and folding ä into a made half of the 174 "nakki" results crispbread. A
+   plain a or o written with a separate ¨ or ˚ is read as ä, ö or å. So `leipa` is not
+   `leipä`: it finds nothing itself, and typo correction then offers "leipä", labelled
+   (step 9).
 2. **Aliases** (`aliases.json`, hand-maintained): map a query to one or more search terms,
    e.g. `maitoa → maito`, `kevari → kevytmaito`, `jogu → jogurtti`. Applied to whole
    query words; the word still being typed also picks up aliases whose key starts with
    it, once it has 4+ letters (`vessap` already finds `wc-paperi`), unless it has an
    alias of its own (`kana` means chicken from the first keystroke, not the start of
    `kananmuna`). Aliases widen what matches and never drop the typed word; they do not
-   boost. A term written **`-text`** excludes instead: a product or category whose name
-   contains the text is left out of that query's results, so `"kana": ["broileri",
-"-muna", "-porkkana", "-lakana"]` finds every chicken product but not eggs (_kanan
-   munia_), carrots (_porkkana_) or bed sheets (_lakana_).
+   boost.
+
+   The file maps a word to its extra terms; the word itself is always searched too:
+
+   ```json
+   "vessapaperi": ["wc-paperi"],
+   "maito": ["=maidot"],
+   "kana": ["broileri", "-muna", "-porkkana", "-lakana"]
+   ```
+
+   Two term forms change what a term does:
+
+   - **`=word`** matches the whole word only: `=maidot` finds "Maidot" (milk) but not
+     "Maidottomat" (dairy-free), which a plain `maidot` would. Use it when a plain term
+     is also the start of an unrelated longer word.
+   - **`-text`** excludes instead: a product or category whose name contains the text is
+     left out of that query's results. With `-muna`, `-porkkana` and `-lakana`, `kana`
+     finds every chicken product but not eggs (_kanan munia_), carrots (_porkkana_) or
+     bed sheets (_lakana_).
+
+   Rules, checked by the build: a key is one word of at most 40 characters, at most 16
+   terms, no two keys that fold to the same word.
+
 3. **Match.** A query word of 3+ letters matches anywhere in the name (`maito` finds
    `kevytmaito`); a word of 1–2 letters matches only at the start of a word, decided per
    word, so `maito l` narrows to names with a word starting with `l` rather than every
@@ -217,11 +240,10 @@ Each step is a handful of atomic commits, a source file with its test.
    category page.
 8. **Measure**: a bench over the real data with typing sequences (`m`, `ma`, `mai`,
    `maito`, multi-word typos like `maito laktoositonx`): `pnpm bench:search`, PC numbers in
-   §10. Then
-   run it in the web app on the oldest team phone, measuring keystroke → results painted
-   and the longest freeze while tiers load. **Decision point:** if every keystroke is under
-   50 ms, propose in §17 that the scan replaces FlexSearch; if not, try a worker or an
-   index, each a §17 decision.
+   §10. Then run it in the web app on the oldest team phone (`?bench`), measuring
+   keystroke → results painted and the longest freeze while tiers load. **Decision point:**
+   if every keystroke is under 50 ms, propose in §17 that the scan replaces FlexSearch; if
+   not, try a worker or an index, each a §17 decision. **Phone run not done yet (§11).**
 9. **Typo tolerance**: edit distance 1 on query words of five or more letters, only when the
    exact search returns fewer than 5 results and no categories, so it never pushes a
    correct match down. Its word list is built in idle time after tier 3 loads, never
@@ -243,7 +265,8 @@ On the real catalogue:
 - **The §14 target**: `ma` and `maito` put a milk first; `maito`'s first category is
   "Maidot", never a top-level category.
 - Compounds: `leipä` finds `ruisleipä` first; `maito` finds `kevytmaito`.
-- Folding: `leipa` and `leipä` return identical results; `creme fraiche` finds products.
+- Folding: `creme fraiche` finds crème fraîche; `nakki` never finds näkkileipä; `leipa`
+  (no ä) is offered "leipä" by typo correction.
 - Aliases: `vessapaperi` finds at least 5 products.
 - AND: `maito laktoositon` returns only names containing both; `maito l` only names with
   a word starting with `l`.
@@ -290,6 +313,7 @@ the 1 MB the build allows.
 | First build                                    | 0.333 ms | 1.372 ms | 2.692 ms |
 | Short words found without searching for spaces | 0.335 ms | 1.096 ms | 1.756 ms |
 | Category strings built once                    | 0.054 ms | 0.792 ms | 1.479 ms |
+| Typo correction and alias exclusions measured  | 0.272 ms | 1.146 ms | 2.911 ms |
 
 What changed:
 
@@ -299,9 +323,36 @@ What changed:
 - **Category strings.** Every keystroke built 1,042 category strings; building them once
   made the typical keystroke 6× faster (p50: 0.333 → 0.054 ms).
 
-Slowest sequence now: `vessapaperi`, p95 1.3 ms. While "vess…" is typed, the scan passes over
-the text for several alias terms before it finds a match.
+Slowest sequences now: `maito laktoositonx` and `maito xyzq`, p95 1.8–1.9 ms, max 2.9 ms.
+They find almost nothing, so typo correction searches a second time (and `maito
+laktoositonx` then finds lactose-free milk); and `vessapaperi`, p95 1.3 ms, where the scan
+passes over the text for several alias terms while "vess…" is typed. The last row is the
+first run that measures typo correction: earlier runs timed the keystrokes before its
+vocabulary (ready ~30 ms after tier 3) existed, so it never ran.
 
 At 10× slower, a typical old phone would see p95 ≈ 8 ms: inside the 50 ms
-keystroke → results target, slightly above this plan's 5 ms engine budget. The phone run in
-step 8 decides whether anything more is needed.
+keystroke → results target, slightly above this plan's 5 ms engine budget. Whether anything
+more is needed waits for the phone run (§11).
+
+## 11. Phone testing: not done yet
+
+**No phone has been tested.** Decided 2026-10-04: the phone run is deferred to a later date.
+For now the speed is judged by feel when using the app; exact phone numbers are not needed
+before then. Until it is done, every speed claim in this plan is a PC number or an estimate,
+and the §17 question "scan or index" stays open.
+
+What exists for it:
+
+- **The in-app benchmark**, `apps/web/src/bench/SearchBench.tsx`: it types the 12 benchmark
+  sequences into the real search screen and reports keystroke → results painted, the
+  engine alone, tier 1 ready time, and the longest freeze while tiers 2–3 load.
+- **How to run it** on a phone on the same wifi as the PC (PowerShell):
+  `$env:VITE_BENCH='1'; pnpm --filter @pathfinder/web build; pnpm --filter @pathfinder/web preview --host`,
+  then open `http://<PC address>:4173/?bench`, wait for "kaikki tasot ja kirjoitusvirheiden korjaus ladattu" and tap
+  "Aja testi". A normal production build does not contain the benchmark.
+- **The only runs so far** are headless Chromium on the development PC, production build.
+  Latest, with typo correction ready: keystroke → painted p50 5.7 ms / p95 6.6 ms / max
+  8.8 ms; engine p95 1.2 ms; tier 1 ready 113 ms after opening; no long tasks while tiers
+  loaded.
+
+When it is done: record the phone, browser and numbers here, then close the §17 question.

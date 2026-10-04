@@ -63,6 +63,17 @@ describe('category exclusions', () => {
   });
 });
 
+describe('whole-word alias terms in category names', () => {
+  it('match "Maidot" but not "Maidottomat jogurtit"', () => {
+    const using = createCategoryIndex(
+      [category(1, 'Maidot'), category(2, 'Maidottomat jogurtit')],
+      { 1: 0, 2: 0 },
+    );
+    const query = parseQuery('maito ', prepareAliases({ maito: ['=maidot'] }));
+    expect(using.match(query).map((c) => c.name)).toEqual(['Maidot']);
+  });
+});
+
 describe('category ordering', () => {
   it('orders by score: exact, then all word starts, then anywhere', () => {
     const using = createCategoryIndex(

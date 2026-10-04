@@ -144,8 +144,8 @@ describe('validateAliases', () => {
   });
 
   it('rejects two keys that fold to the same word', () => {
-    expect(validateAliases({ leipä: ['leivät'], Leipa: ['leipä'] })).toEqual([
-      'alias "Leipa": same word as alias "leipä"',
+    expect(validateAliases({ leipä: ['leivät'], LEIPÄ: ['leipä'] })).toEqual([
+      'alias "LEIPÄ": same word as alias "leipä"',
     ]);
   });
 

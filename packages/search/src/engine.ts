@@ -3,6 +3,7 @@ import { createCategoryIndex } from './categories';
 import { buildHaystack, CHUNK_SIZE, yieldToMain, type Haystack, type YieldFn } from './haystack';
 import { parseQuery, prepareAliases, type ParsedQuery } from './query';
 import { scan } from './scan';
+import { buildVocabulary, correctWord, type Vocabulary } from './typo';
 import type {
   Aliases,
   CategoryHit,
@@ -20,6 +21,8 @@ import type {
 export const PAGE_SIZE = 20;
 /** Example products shown under a category result. */
 export const CATEGORY_EXAMPLES = 3;
+/** Typo correction is tried only when a search finds fewer products than this. */
+export const FEW_RESULTS = 5;
 
 const TIERS: readonly TierNumber[] = [1, 2, 3];
 
@@ -42,8 +45,10 @@ export type SearchEngine = {
   searchWithin(categoryId: number, raw: string, limit?: number, cursor?: Cursor): SearchResponse;
   /** Direct sub-categories, for the chips on a category page. */
   subcategories(categoryId: number): Category[];
-  /** Increments whenever a tier lands, so a UI knows to re-run the current query. */
+  /** Increments whenever a tier or the typo vocabulary lands, so a UI re-runs the query. */
   getVersion(): number;
+  /** Whether typo correction can run: every tier is in and its vocabulary is built. */
+  typoReady(): boolean;
   subscribe(listener: () => void): () => void;
 };
 
@@ -57,6 +62,19 @@ export function createSearchEngine(input: SearchEngineInput): SearchEngine {
   const byEan = new Map<string, ProductRef>();
   const listeners = new Set<() => void>();
   let version = 0;
+  let vocabulary: Vocabulary | null = null;
+
+  const changed = () => {
+    version += 1;
+    for (const listener of listeners) listener();
+  };
+
+  /** Built once every tier is in, in idle chunks, never during a keystroke. */
+  const startVocabulary = async () => {
+    const haystacks = TIERS.map((tier) => tiers.get(tier)!.haystack);
+    vocabulary = await buildVocabulary(haystacks, yieldFn);
+    changed();
+  };
 
   const addTier = async (data: TierData) => {
     const haystack = await buildHaystack(data.names, yieldFn);
@@ -65,8 +83,8 @@ export function createSearchEngine(input: SearchEngineInput): SearchEngine {
       byEan.set(data.eans[i]!, refAt(data, i));
     }
     tiers.set(data.tier, { data, haystack });
-    version += 1;
-    for (const listener of listeners) listener();
+    changed();
+    if (tiers.size === TIERS.length && !vocabulary) void startVocabulary();
   };
 
   const pendingTiers = () => TIERS.filter((tier) => !tiers.has(tier));
@@ -106,7 +124,11 @@ export function createSearchEngine(input: SearchEngineInput): SearchEngine {
     ...found,
     pendingTiers: pendingTiers(),
     terms: query.slots.flatMap((slot) =>
-      slot.alternatives.map(({ term, mode }) => ({ term, wordStart: mode === 'word-start' })),
+      slot.alternatives.map(({ term, mode }) => ({
+        term,
+        wordStart: mode !== 'anywhere',
+        ...(mode === 'whole-word' && { wholeWord: true }),
+      })),
     ),
   });
 
@@ -122,13 +144,33 @@ export function createSearchEngine(input: SearchEngineInput): SearchEngine {
 
   const start: Cursor = { tier: 1, next: 0 };
 
+  const searchAll = (raw: string, limit: number): SearchResponse => {
+    const query = parseQuery(raw, aliases);
+    if (query.isEmpty) return respond(raw, query, [], { products: [], cursor: null });
+    return respond(raw, query, categoryHits(query), collect(query, start, limit));
+  };
+
+  /**
+   * When a search finds almost nothing, retries with each long word replaced by the
+   * catalogue word one edit away (docs/plans/search.md step 9), and keeps the retry only
+   * if it finds more. Never runs before every tier and the vocabulary are in.
+   */
+  const withTypoCorrection = (raw: string, limit: number, found: SearchResponse) => {
+    if (!vocabulary || found.categories.length > 0 || found.products.length >= FEW_RESULTS) {
+      return found;
+    }
+    const words = parseQuery(raw, aliases).slots.map((slot) => slot.word);
+    const fixed = words.map((word) => correctWord(word, vocabulary!) ?? word);
+    if (fixed.every((word, i) => word === words[i])) return found;
+    const to = fixed.join(' ');
+    const retry = searchAll(to + (/\s$/.test(raw) ? ' ' : ''), limit);
+    if (retry.products.length <= found.products.length) return found;
+    return { ...retry, query: raw, corrected: { from: words.join(' '), to } };
+  };
+
   return {
     addTier,
-    search(raw, limit = PAGE_SIZE) {
-      const query = parseQuery(raw, aliases);
-      if (query.isEmpty) return respond(raw, query, [], { products: [], cursor: null });
-      return respond(raw, query, categoryHits(query), collect(query, start, limit));
-    },
+    search: (raw, limit = PAGE_SIZE) => withTypoCorrection(raw, limit, searchAll(raw, limit)),
     searchMore(raw, cursor, limit = PAGE_SIZE) {
       const query = parseQuery(raw, aliases);
       return respond(raw, query, [], collect(query, cursor, limit));
@@ -141,6 +183,7 @@ export function createSearchEngine(input: SearchEngineInput): SearchEngine {
     },
     subcategories: (categoryId) => categoryIndex.children(categoryId),
     getVersion: () => version,
+    typoReady: () => vocabulary !== null,
     subscribe(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);

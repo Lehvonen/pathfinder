@@ -67,7 +67,7 @@ describe('parseQuery aliases', () => {
   });
 
   it('lists the word once even when the alias repeats it', () => {
-    expect(terms(parse('Leipä '))).toEqual(['leipa', 'leivat']);
+    expect(terms(parse('Leipä '))).toEqual(['leipä', 'leivät']);
   });
 
   it('adds aliases of longer keys while a word of 4+ letters is being typed', () => {
@@ -108,8 +108,8 @@ describe('parseQuery subsumption', () => {
   const aliasTerms = (q: ParsedQuery) => terms(q).filter((term) => term !== 'xq');
 
   it('drops an anywhere term that contains another anywhere term', () => {
-    // typing "leip" also brings in leipä's aliases; "leipa" contains "leip"
-    expect(terms(parse('leip'))).toEqual(['leip', 'leivat']);
+    // typing "leip" also brings in leipä's aliases; "leipä" contains "leip"
+    expect(terms(parse('leip'))).toEqual(['leip', 'leivät']);
     expect(aliasTerms(parse('xq ', custom({ xq: ['kevyt', 'kevytmaito'] })))).toEqual(['kevyt']);
   });
 
@@ -133,7 +133,7 @@ describe('parseQuery subsumption', () => {
 
 describe('prepareAliases', () => {
   it('folds keys and terms and drops terms that fold to nothing', () => {
-    expect([...prepareAliases({ Leipä: ['Leivät', '—'] })]).toEqual([['leipa', ['leivat']]]);
+    expect([...prepareAliases({ Leipä: ['Leivät', '—'] })]).toEqual([['leipä', ['leivät']]]);
   });
 });
 
@@ -153,5 +153,41 @@ describe('parseQuery exclusions', () => {
   it('has no exclusions without -term aliases, and drops a bare marker', () => {
     expect(parse('maito', using).exclude).toEqual([]);
     expect(prepareAliases({ wc: ['-', '- /', 'ok'] }).get('wc')).toEqual(['ok']);
+  });
+});
+
+describe('parseQuery whole-word terms', () => {
+  const custom = (a: Aliases) => prepareAliases(a);
+  /** The alternatives besides the dummy word "xq" itself, which every alias now keeps. */
+  const aliasTerms = (q: ParsedQuery) => terms(q).filter((term) => term !== 'xq');
+
+  it('turns an alias term written =word into a whole-word alternative', () => {
+    expect(parse('maito ', custom({ maito: ['maito', '=MAIDOT'] })).slots[0]!.alternatives).toEqual(
+      [
+        { term: 'maito', mode: 'anywhere', needle: 'maito' },
+        { term: 'maidot', mode: 'whole-word', needle: ' maidot ' },
+      ],
+    );
+  });
+
+  it('drops a term that is only the marker', () => {
+    expect([...prepareAliases({ x: ['=', '= -', 'ok'] })]).toEqual([['x', ['ok']]]);
+  });
+
+  it('drops a whole-word term that an anywhere or word-start term already covers', () => {
+    expect(aliasTerms(parse('xq ', custom({ xq: ['maidot', '=maidot'] })))).toEqual(['maidot']);
+    expect(aliasTerms(parse('xq ', custom({ xq: ['ma', '=maidot'] })))).toEqual(['ma']);
+  });
+
+  it('keeps an anywhere term even when a whole-word term matches the same text', () => {
+    // =maidot matches only "maidot"; maidottomat must still match the anywhere term
+    expect(aliasTerms(parse('xq ', custom({ xq: ['=maidot', 'maidottomat'] })))).toEqual([
+      'maidot',
+      'maidottomat',
+    ]);
+  });
+
+  it('drops a whole-word phrase that a whole-word word inside it covers', () => {
+    expect(aliasTerms(parse('xq ', custom({ xq: ['=maidot', '=maidot ja'] })))).toEqual(['maidot']);
   });
 });

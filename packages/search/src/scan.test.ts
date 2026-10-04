@@ -99,6 +99,17 @@ describe('scan exclusions', () => {
   });
 });
 
+describe('scan whole-word terms', () => {
+  it('matches the whole word only, at the end of an item or before a space', async () => {
+    const h = await buildHaystack(
+      ['Maidot', 'Maidottomat jogurtit', 'Valio maidot 1l', 'kevytmaidot', 'maidot ja piimat'],
+      noYield,
+    );
+    const using = prepareAliases({ x: ['=maidot'] });
+    expect(scan(h, parse('x ', using), 0, 20).items).toEqual([0, 2, 4]);
+  });
+});
+
 describe('scan cost', () => {
   afterEach(() => {
     vi.restoreAllMocks();
