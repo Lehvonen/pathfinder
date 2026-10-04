@@ -87,7 +87,7 @@ stops the run with its name and the first problems.
 | `departments.json`  | the reviewed row, `orderNumber`, `zone`, shelves seen, product count | map editor, unmatched-shelf handoff          |
 | `report.md`         | exclusions by reason, warnings, per-department stats                 | the "reviewed by hand" step                  |
 
-**Why commit `data/normalised/`:** the raw cache is gitignored and exists on one laptop.
+**Why commit `data/normalised/`:** the raw cache is gitignored and exists on one PC.
 Committing the cleaned output gives the other five people real data without an 18-hour
 scrape. It's also the baseline `diff.ts` compares against. It is about 8.5 MB of JSON.
 
