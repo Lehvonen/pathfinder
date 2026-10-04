@@ -59,7 +59,7 @@ export type Edge = {
 };
 
 export type Shelf = {
-  id: string; // the shelf ID printed in the store
+  id: string; // "<departmentId>:<shelf>", e.g. "91208:05"; ":00" is the whole department area
   accessNodeId: string; // where you stand to reach it
   polygon: [number, number][]; // outline, in metres
 };
