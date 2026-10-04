@@ -17,38 +17,49 @@ Track C.
 
 Profiled on 2026-10-04 from `data/normalised/` (scrape of 2026-10-03).
 
-| Finding                                                                | Number                        | Consequence                                                                       |
-| ---------------------------------------------------------------------- | ----------------------------- | --------------------------------------------------------------------------------- |
-| Searchable products                                                    | 39,479                        | Names only; brand is already part of most names                                   |
-| …in the 14 food top-level categories / the other 13                    | 19,415 / 20,064               | The split the tiers in §3 are built on                                            |
-| Name length                                                            | 41 chars average, 1.6 M total | The whole name list is small enough to scan                                       |
-| Products with a popularity score                                       | 28,886 (73%)                  | The rest sort last, by name (§6)                                                  |
-| Share of total popularity in the top 1k / 2k / 5k / 10k                | 47% / 61% / 82% / 94%         | Matches §10's "top 5,000 ≈ 81%"                                                   |
-| "leipä": names containing it / names with a word **starting** with it  | 462 / 87                      | **Finnish compounds: infix matching is required.** Word-prefix misses `ruisleipä` |
-| "maito": containing / word-prefix                                      | 347 / 250                     | Same: `kevytmaito`, `rasvaton maito`                                              |
-| "maito" substring matches, sorted by popularity                        | top 3 are all 1 l milks       | **Popularity alone already passes the "milk first" target** (§14)                 |
-| Inflected forms (`maitoa`, `maidon`) in names                          | 41                            | Rare in names. Inflection is a query-side problem, handled by aliases             |
-| Linear `String.includes` over every name, per query, laptop            | ~2 ms                         | A phone 10× slower is still inside the 50 ms target, before any index             |
-| Distinct infix substrings (what a FlexSearch `full` tokenizer indexes) | ~490,000                      | A prebuilt infix index is large; the size may not fit the 3 MB core budget        |
-| Distinct trigrams                                                      | ~9,500                        | A trigram index would be small, if one is needed at all                           |
-| Categories                                                             | 1,042, 27 top-level           | Clean K-Ruoka names: what group results are made of (§4)                          |
-| Store departments                                                      | 202                           | Internal names like "(KT 1) Taloustavara": never shown or searched                |
+| Finding                                                                   | Number                         | Consequence                                                                        |
+| ------------------------------------------------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------- |
+| Searchable products                                                       | 39,479                         | Names only; brand is already part of most names                                    |
+| …in the 14 food top-level categories / the other 13                       | 19,415 / 20,064                | The split the tiers in §3 are built on                                             |
+| Name length                                                               | 41 chars average, 1.6 M total  | The whole name list is small enough to scan                                        |
+| Products with a popularity score                                          | 28,886 (73%)                   | The rest sort last, by name (§6)                                                   |
+| Share of total popularity in the top 1k / 2k / 5k / 10k                   | 47% / 61% / 82% / 94%          | Matches §10's "top 5,000 ≈ 81%"                                                    |
+| "leipä": names containing it / names with a word **starting** with it     | 462 / 87                       | **Finnish compounds: infix matching is required.** Word-prefix misses `ruisleipä`  |
+| "maito": containing / word-prefix                                         | 347 / 250                      | Same: `kevytmaito`, `rasvaton maito`                                               |
+| "maito" substring matches, sorted by popularity                           | top 3 are all 1 l milks        | **Popularity alone already passes the "milk first" target** (§14)                  |
+| Inflected forms (`maitoa`, `maidon`) in names                             | 41                             | Rare in names. Inflection is a query-side problem, handled by aliases              |
+| Ranking `leipä` / `pesuaine` with word-start matches first                | `leipäjuusto` / a rarer soap   | **Rank by popularity only.** The product is the last part of a compound (§5)       |
+| 1–2 letter words matched anywhere: `m` → 29,147 names, top `Kurkku Suomi` | `ma` word-start → a milk first | **Words of 1–2 letters match word starts only** (§5)                               |
+| Names with accents beyond ä/ö/å (`crème fraîche`, `Jamón`, `ø`)           | ~220                           | Fold with Unicode decomposition, not a hand-written table (§5)                     |
+| Linear `String.includes` over every name, per query, laptop               | ~2 ms                          | A phone 10× slower is still inside the 50 ms target, before any index              |
+| Distinct infix substrings (what a FlexSearch `full` tokenizer indexes)    | ~490,000                       | A prebuilt infix index is large; the size may not fit the 3 MB core budget         |
+| Distinct trigrams                                                         | ~9,500                         | A trigram index would be small, if one is needed at all                            |
+| Categories                                                                | 1,042, 27 top-level            | Clean K-Ruoka names: what group results are made of (§4)                           |
+| Category names are plural: `leipä` vs "Leivät", `olut` vs "Oluet"         | no match without aliases       | Aliases apply to category names too (§4)                                           |
+| A leaf category called "Maito"                                            | none                           | `maito` matches "Maitotuotteet" and the top-level "Maito, juusto, munat ja rasvat" |
+| Store departments                                                         | 202                            | Internal names like "(KT 1) Taloustavara": never shown or searched                 |
 
 The infix rows matter most. §17 decided on prebuilt FlexSearch indexes because "index
 build at startup … is what misses the target at 50k products on an old phone". At 39k
-products a scan needs no index build at all. Before adding FlexSearch, **measure the scan
-on the oldest team phone** (step 7). FlexSearch stays the plan unless the numbers say
-otherwise; changing that is a §17 decision, not a quiet swap.
+products a scan needs no index build at all, provided the scan reads the list at most
+once per query word, however many words are typed (§5.3). Before adding FlexSearch,
+**measure the scan on the oldest team phone** (step 8). FlexSearch stays the plan unless
+the numbers say otherwise; changing that is a §17 decision, not a quiet swap.
 
 ## 2. Where the code lives
 
 A new workspace package, **`packages/search`**: framework-free TypeScript, unit-tested,
-used by the web app at runtime and by `scripts/build-data.ts` at build time.
+used by the web app at runtime and by the data build. Its build-time half is a separate
+export, `@pathfinder/search/build`, so the web app never bundles it.
 
 Not `packages/core`, because search will likely pull in a dependency (FlexSearch) that
 the router does not need, and `core` stays small. Not `apps/web`, because the build
 script needs the same normalisation and tiering code as the runtime, or queries and the
 data stop agreeing. _(Needs agreement: §5 does not list this package yet.)_
+
+The search build runs as `pnpm data:search` (`scripts/build-search.ts`, Node via `tsx`).
+It is the search half of the planned `scripts/build-data.ts`: when `data:build` is
+written, it calls the same functions, and both write into `data/build/core/`.
 
 ## 3. Three tiers
 
@@ -72,8 +83,10 @@ keitot ja ateria-ainekset; Texmex ja maailman maut; Hedelmät ja vihannekset; Ö
 ja salaattikastikkeet; Kala ja merenelävät. Lapset and Lemmikit are non-food.
 
 **Clothing** is Vaatteet ja asusteet and Kengät ja kenkienhoito. It never enters tiers 1
-or 2, and neither does "uncategorised". Both lists are named constants in `tiers.ts`,
-matched on category id, not name.
+or 2, and neither does "uncategorised". The food, clothing and uncategorised lists are
+category id constants in `tiers.ts` (ids are stable: `category-ids.json` is append-only).
+The build checks that each id still has the expected name and fails if not, so a K-Ruoka
+rename is caught instead of silently moving products between tiers.
 
 **Equal share** means each category gets `size ÷ categories` places, and a category with
 fewer ranked products than that gives its spare places to the others, repeated until the
@@ -102,8 +115,15 @@ _Agreed 2026-10-04._
 - **Category names never affect product search.** A product matches on its own name only;
   sitting in "Maito, juusto, munat ja rasvat" does not make it rank higher for "maito".
 - **A category is a result only when the query matches the category's name**, e.g.
-  "hedelmät ja vihannekset", "banaanit", "maito". Category results are listed above
-  product results (§10: a category match is a strong result).
+  "hedelmät ja vihannekset", "banaanit", "maito", and only once a query word has 3+
+  letters (`m` alone matches 410 category names). Aliases apply, so `leipä` finds
+  "Leivät". Category results are listed above product results (§10: a category match is
+  a strong result), at most 3.
+- **The most specific category wins.** When both a category and one of its descendants
+  match, the ancestor is dropped; the rest are ordered by how exactly the name matches,
+  then deeper first, then by the popularity of their best product. `maito` gives
+  "Maitotuotteet", not all of dairy, so "add maito" does not become "add the whole dairy
+  department".
 - **Categories, not store departments.** The 1,042 K-Ruoka categories have names
   shoppers recognise; the store's department names are internal and never searched.
 - **A category result has two actions:**
@@ -121,98 +141,119 @@ query ──► normalise ──► aliases ──► match ──► rank ─�
                                   index later
 ```
 
-1. **Normalise**, applied identically to names at build time and to queries at runtime:
-   lowercase, collapse whitespace, strip punctuation except digits and units. Fold `ä→a`,
-   `ö→o`, `å→a` **for matching only**, so `leipa` finds `leipä` on a keyboard without
-   Finnish letters. An exact match on the unfolded text scores higher.
+1. **Normalise**, applied identically to names and queries: remove zero-width
+   characters, decompose accents and drop them (`crème` → `creme`, `ä` → `a`, `ö` → `o`,
+   plus `ø`, `æ`, `ß`, which do not decompose), lowercase, turn every other character into
+   a space (`wc-paperi` → `wc paperi`), collapse spaces. `leipa` and `leipä` are the same
+   query; there is **no** extra score for typing the ä, because any boost would break the
+   pre-sorted order the scan relies on.
 2. **Aliases** (`aliases.json`, hand-maintained): map a query to one or more search terms,
    e.g. `maitoa → maito`, `kevari → kevytmaito`, `jogu → jogurtti`. Applied to whole
-   query words before matching.
-3. **Match** every query word as an infix of the normalised name. All words must match
-   (AND), so `maito laktoositon` narrows rather than widens.
-4. **Rank**, within categories and within each tier:
-   1. a match at the start of a word above one in the middle of a compound
-   2. popularity, descending; unranked products last
-   3. shorter name first, then EAN (or category id), so the order is deterministic and
-      testable
-5. Show matching categories first, then tier 1, 2 and 3 results as each tier finishes,
-   ~20 visible at a time. Category results carry the top SKUs from `category-top.json`.
+   query words; the word still being typed also picks up aliases whose key starts with
+   it, once it has 4+ letters (`vessap` already finds `wc-paperi`). Aliases widen what
+   matches; they do not boost.
+3. **Match.** A query word of 3+ letters matches anywhere in the name (`maito` finds
+   `kevytmaito`); a word of 1–2 letters matches only at the start of a word, decided per
+   word, so `maito l` narrows to names with a word starting with `l` rather than every
+   `1l`. All words must match (AND), so `maito laktoositon` narrows rather than widens.
+   The scan reads each tier at most once per query word, however many words there are,
+   so a typo in the second word cannot make a keystroke slow.
+4. **Rank by popularity only**, which is the order the tiers are stored in: ranked before
+   unranked, popularity descending, then shorter name, then EAN, so the order is
+   deterministic. Ranking word-start matches first was rejected on real data: it puts
+   `leipäjuusto` (cheese) above `ruisleipä` (bread) for `leipä`, because in Finnish the
+   product is the last part of a compound. Since scan order is rank order, the scan stops
+   at the 20th match.
+5. Show matching categories first, then tier 1, 2 and 3 results as each tier loads,
+   20 at a time with "show more". Category results show up to three example products from
+   `category-top.json`, filling in as the tiers holding them load. No result count: it
+   would need a full scan per keystroke.
 
 ## 6. Data it needs
 
-| File                     | Built from                                    | Tier | Notes                                                                  |
-| ------------------------ | --------------------------------------------- | ---- | ---------------------------------------------------------------------- |
-| search entries / indexes | `products.json`, `popularity.json`            | core | Payload `{ ean, name }` (§17); one chunk per tier, pre-sorted          |
-| `category-top.json`      | `products.json`, `popularity.json`            | core | `categoryId → [ean, …]`, top ~10 per category (§7 step 5)              |
-| `categories.json`        | already in `data/normalised/`                 | core | Category names are searched for group results (§4)                     |
-| `aliases.json`           | `data/curation/aliases.json`, hand-maintained | core | Starts with ~20 entries from the profiling queries; grown continuously |
+| File                       | Built from                                    | Tier | Notes                                                                       |
+| -------------------------- | --------------------------------------------- | ---- | --------------------------------------------------------------------------- |
+| `search-tier-{1,2,3}.json` | `products.json`, `popularity.json`            | core | Columnar `{ eans, names, categoryIds }`, pre-sorted; ~850 KB gzipped in all |
+| `category-top.json`        | `products.json`, `popularity.json`            | core | `categoryId → [ean, …]`, top 10 per category subtree (§7 step 5)            |
+| `category-rank.json`       | `products.json`, `popularity.json`            | core | `categoryId →` rank of its best product; orders category results (§4)       |
+| `categories.json`          | `data/normalised/categories.json`             | core | The one core categories file; names searched for group results (§4)         |
+| `aliases.json`             | `data/curation/aliases.json`, hand-maintained | core | Starts with ~20 entries from the profiling queries; grown continuously      |
 
 Pre-sorting each tier by popularity at build time means the scan finds results already in
 rank order and can stop early once it has enough of them. That is most of the speed for
 one-letter queries, which match thousands of names.
 
-The category page (§4) needs each product's category. The search payload stays
-`{ ean, name }`; the category id comes from `placements-primary.json`, already core.
+The category page (§4) needs each product's category, so the tier files carry
+`categoryIds` alongside §17's `{ ean, name }` payload: 49 KB gzipped, and it keeps search
+independent of `placements-primary.json`, which cannot be built until the graph exists.
+Recorded as a §17 change.
 
 ## 7. Steps
 
-Each step is one or two atomic commits, a source file with its test.
+Each step is a handful of atomic commits, a source file with its test.
 
-1. **Package skeleton**: `packages/search` with `package.json`, `tsconfig.json`, vitest,
-   wired into the workspace. No code.
-2. **`normalise.ts`**: the text normalisation in §5.1, with tests on real names
-   (`Täysjyväruisleipä`, `1l`, `n.36 kpl/pak`, double spaces).
-3. **`tiers.ts`**: the food and clothing lists and the split in §3, as a pure function
-   from products, categories and popularity to three ordered lists. Tests pin the share
-   arithmetic, spare places moving on, food leftovers filling tier 2 before non-food,
-   clothing never in tiers 1–2, and unranked products landing in tier 3.
-4. **`match.ts`** + **`rank.ts`**: infix AND match and the ranking order, as pure functions
-   over a small fixture. Tests pin compound matches and deterministic tie-breaks.
-5. **`categories.ts`**: category-name matching for group results, and `searchWithin`.
-6. **`search.ts`**: the public API, `createSearch({ tiers, categories, aliases })` →
-   results delivered tier by tier. This is the Track E "`String.includes` … good enough
-   for the first store run", except it is built to stay.
-7. **Measure**: a bench script over the real `data/normalised/` with the §14 queries
-   (`m`, `ma`, `mai`, `maito`, …). Record laptop numbers here, then run it in a page on the
-   oldest team phone. **Decision point:** if every keystroke is under 50 ms, propose in
-   §17 that the scan replaces FlexSearch; if not, go to step 8.
-8. **Index**, only if step 7 needs it: FlexSearch with a custom tokenizer, or a trigram
-   index, one per tier, chosen on measured size against the 3 MB core budget. Prebuilt
-   and exported by `build-data.ts` (§7 step 5).
+1. **Package skeleton**: `packages/search` with `package.json` (exports `"."` and
+   `"./build"`), `tsconfig.json`, vitest, Codecov upload. No code.
+2. **`normalise.ts`**: the normalisation in §5.1, with tests on real names
+   (`Täysjyväruisleipä`, `Crème fraîche`, `n.36 kpl/pak`, `Rustico-leipä`, a decomposed ä).
+3. **`haystack.ts`** + **`query.ts`** + **`scan.ts`**: each tier's names joined into one
+   searchable string, the query parsed into words with their aliases and matching rule,
+   and the scan that stops at the `limit`-th match (§5.3–5.4).
+4. **`categories.ts`**: category matching and ordering (§4), and the category-page filter.
+5. **`engine.ts`**: the public API, `createSearchEngine(…)` with `addTier`, `search`,
+   `searchMore` and `searchWithin`. Tiers are added as they load, in small pieces so typing
+   never freezes. This is the Track E "`String.includes` … good enough for the first store
+   run", except it is built to stay.
+6. **Build**: `build/tiers.ts` (the split in §3), `category-top`, the tier files, and the
+   build checks, then `scripts/build-search.ts` writing into `data/build/core/`. This
+   overlaps the Track B `data:build` card; coordinate with whoever holds it.
+7. **Web app**: data loading, the search bar, product and category results, and the
+   category page.
+8. **Measure**: a bench over the real data with typing sequences (`m`, `ma`, `mai`,
+   `maito`, multi-word typos like `maito laktoositonx`). Record laptop numbers here, then
+   run it in the web app on the oldest team phone, measuring keystroke → results painted
+   and the longest freeze while tiers load. **Decision point:** if every keystroke is under
+   50 ms, propose in §17 that the scan replaces FlexSearch; if not, try a worker or an
+   index, each a §17 decision.
 9. **Typo tolerance**: edit distance 1 on query words of five or more letters, only when the
-   exact search returns fewer than ~5 results, so it never pushes a correct match down.
-10. **Build output**: `build-data.ts` writes the tiers, `category-top.json` and
-    `aliases.json` into `data/build/core/`. This overlaps the Track B `data:build` card;
-    coordinate with whoever holds it.
-11. **Web Worker** in `apps/web`, so search never blocks typing. Only if step 7 shows the
-    main thread is the bottleneck.
+   exact search returns fewer than 5 results and no categories, so it never pushes a
+   correct match down. Its word list is built in idle time after tier 3 loads, never
+   during a keystroke.
 
-Steps 1–6 are usable on their own: the app can search the real catalogue as soon as they
-are merged. The architecture doc changes (§10 tiers, §11 category page, §17 hot-index
-size) are one separate commit after this plan.
+Steps 1–5 give a working, tested engine; step 6 feeds it real data. The architecture doc
+changes land in the same PRs as the code they describe: §5 and the §17 decisions with the
+engine, §7, §14 and §15 with the build.
 
 ## 8. Tests that matter
 
-- **The §14 target as a test**: over the real catalogue, `m`, `ma`, `mai` and `maito`
-  put a milk product or the "Maito" category first. Runs against `data/normalised/` and
-  is skipped if the file is missing.
-- Compounds: `leipä` finds `ruisleipä`; `maito` finds `kevytmaito`.
-- Folding: `leipa` and `leipä` return the same set; the `ä` query ranks exact matches first.
-- AND: `maito laktoositon` returns only names containing both.
-- Category names: `maito` does not boost a product whose name lacks "maito";
-  `hedelmät ja vihannekset` returns that category as a group result.
+Unit tests run on a hand-written fixture and gate CI. Tests on the real catalogue
+(`pnpm search:golden`) are **not** part of `pnpm test`: a re-scrape changes the data, and
+CI must not go red because a store moved its milk. They run after `pnpm data:search` and
+are updated in the same commit as new data.
+
+On the real catalogue:
+
+- **The §14 target**: `ma` and `maito` put a milk first; `maito`'s first category is
+  "Maitotuotteet", never a top-level category.
+- Compounds: `leipä` finds `ruisleipä` first; `maito` finds `kevytmaito`.
+- Folding: `leipa` and `leipä` return identical results; `creme fraiche` finds products.
+- Aliases: `vessapaperi` finds at least 5 products.
+- AND: `maito laktoositon` returns only names containing both; `maito l` only names with
+  a word starting with `l`.
+- Category names: `hedelmät ja vihannekset` returns that category first.
 - Tiers: results from a later tier never appear above results from an earlier one.
-- Determinism: the same query on the same data always returns the same order.
-- Unranked products never outrank ranked ones within a tier.
+
+On the fixture, every threshold is tested on both sides: 2 vs 3 letters, 3 vs 4 letters
+for alias prefixes, 3 vs 4 matching categories, 4 vs 5 letters and 4 vs 5 results for
+typo correction, and exactly 20 matches ending on a tier's last item. Also: adding a tier
+only appends to the results of an unchanged query; the same query on the same data always
+returns the same order; unranked products never outrank ranked ones.
 
 ## 9. Open questions
 
 - **Non-food share in tier 2** — 125 places per category is the top few percent of
   Kosmetiikka (4,236 ranked) or Lemmikit (1,394). Fine if the tier sizes are only a
-  load-order tool; revisit after step 7 if common non-food searches feel slow.
-- **Scan vs index** — decided by step 7's phone measurement, recorded in §17.
-- **Which categories match**: should "maito" also show the top-level "Maito, juusto,
-  munat ja rasvat"? Probably cap group results at ~3, preferring exact name matches, then
-  deeper categories. To decide with a few real lists in step 5.
+  load-order tool; revisit after step 8 if common non-food searches feel slow.
+- **Scan vs index** — decided by step 8's phone measurement, recorded in §17.
 - **Brand-only queries** ("valio"): brand is in most names already, so they work through
   the name match. Indexing `brand` separately would need the display tier; not planned.
