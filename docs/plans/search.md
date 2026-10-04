@@ -1,7 +1,8 @@
 # Plan: search engine
 
-**Status:** planned, nothing built
-**Architecture refs:** §6 (generic entries, popularity), §7 step 5 (prebuilt indexes),
+**Status:** steps 1–6 built (engine, categories, tiers, build); PC numbers in §10. Web app,
+phone measurement and typo tolerance (steps 7–9) to do
+**Architecture refs:** §6 (generic entries, popularity), §7 step 5 (search build),
 §10 (search), §11 (frontend), §14 (budget, performance targets), §17 (search decisions)
 **Covers checklist items:** Track E, except "Single-item lookup → map pin" (needs the map)
 
@@ -210,7 +211,8 @@ Each step is a handful of atomic commits, a source file with its test.
 7. **Web app**: data loading, the search bar, product and category results, and the
    category page.
 8. **Measure**: a bench over the real data with typing sequences (`m`, `ma`, `mai`,
-   `maito`, multi-word typos like `maito laktoositonx`). Record PC numbers here, then
+   `maito`, multi-word typos like `maito laktoositonx`): `pnpm bench:search`, PC numbers in
+   §10. Then
    run it in the web app on the oldest team phone, measuring keystroke → results painted
    and the longest freeze while tiers load. **Decision point:** if every keystroke is under
    50 ms, propose in §17 that the scan replaces FlexSearch; if not, try a worker or an
@@ -257,3 +259,44 @@ returns the same order; unranked products never outrank ranked ones.
 - **Scan vs index** — decided by step 8's phone measurement, recorded in §17.
 - **Brand-only queries** ("valio"): brand is in most names already, so they work through
   the name match. Indexing `brand` separately would need the display tier; not planned.
+
+## 10. PC measurements
+
+`pnpm bench:search` on the development PC, 2026-10-04, over the committed
+`data/build/core/` (scrape of 2026-10-03, 39,479 products). It types 12 sequences one
+character at a time, 50 runs per keystroke, and times `engine.search` only; rendering is
+measured on the phone in step 8.
+
+**Loading** (parse + index, as the app will):
+
+| Tier | Products | Gzipped | Parse  | Index   |
+| ---- | -------- | ------- | ------ | ------- |
+| 1    | 7,997    | 149 KB  | 2.3 ms | 9.2 ms  |
+| 2    | 9,993    | 212 KB  | 2.3 ms | 11.2 ms |
+| 3    | 21,489   | 480 KB  | 4.8 ms | 24.6 ms |
+
+Search is usable ~12 ms after tier 1 arrives; all search files are 896 KB gzipped, against
+the 1 MB the build allows.
+
+**Per keystroke**, all 12 sequences together:
+
+| Version                                        | p50      | p95      | max      |
+| ---------------------------------------------- | -------- | -------- | -------- |
+| First build                                    | 0.333 ms | 1.372 ms | 2.692 ms |
+| Short words found without searching for spaces | 0.335 ms | 1.096 ms | 1.756 ms |
+| Category strings built once                    | 0.054 ms | 0.792 ms | 1.479 ms |
+
+What changed:
+
+- **Short words.** A 1–2 letter word was searched as `" " + word`, which stops at every
+  space in the text. Searching for the word and checking the character before it made a
+  short word that matches nothing ~30× faster (`pirkka zzz` p95: 2.44 → 0.34 ms).
+- **Category strings.** Every keystroke built 1,042 category strings; building them once
+  made the typical keystroke 6× faster (p50: 0.333 → 0.054 ms).
+
+Slowest sequence now: `vessapaperi`, p95 1.3 ms. While "vess…" is typed, the scan passes over
+the text for several alias terms before it finds a match.
+
+At 10× slower, a typical old phone would see p95 ≈ 8 ms: inside the 50 ms
+keystroke → results target, slightly above this plan's 5 ms engine budget. The phone run in
+step 8 decides whether anything more is needed.
