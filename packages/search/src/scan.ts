@@ -8,7 +8,9 @@ export type ScanResult = {
   next: number | null;
 };
 
-type Cursor = { needle: string; item: number };
+type Cursor = { term: string; wordStart: boolean; item: number };
+
+const SPACE = 32;
 
 /**
  * Finds the first `limit` items from `from` that match every slot of `query`
@@ -30,11 +32,23 @@ export function scan(
   limit: number,
   filter?: (item: number) => boolean,
 ): ScanResult {
+  const { text, starts } = haystack;
   const slots: Cursor[][] = query.slots.map((slot) =>
-    slot.alternatives.map(({ needle }) => ({ needle, item: -1 })),
+    slot.alternatives.map(({ term, mode }) => ({
+      term,
+      wordStart: mode === 'word-start',
+      item: -1,
+    })),
   );
   const seek = (cursor: Cursor, fromItem: number) => {
-    const position = haystack.text.indexOf(cursor.needle, haystack.starts[fromItem]);
+    const start = starts[fromItem]!; // the item's leading space
+    let position = text.indexOf(cursor.term, cursor.wordStart ? start + 1 : start);
+    // A word-start match needs a space before it. Searching for " " + term would stop at
+    // every space in the text, the commonest character; the term itself is far rarer, so
+    // a short word that matches nothing costs ~0.05 ms instead of ~2 ms.
+    while (cursor.wordStart && position !== -1 && text.charCodeAt(position - 1) !== SPACE) {
+      position = text.indexOf(cursor.term, position + 1);
+    }
     cursor.item = position === -1 ? Infinity : itemAt(haystack, position);
   };
 
