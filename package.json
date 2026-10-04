@@ -6,9 +6,12 @@
   "scripts": {
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "pnpm -r typecheck && tsc -p scripts",
     "test": "pnpm -r test",
     "build": "pnpm -r build",
+    "data:search": "tsx scripts/build-search.ts",
+    "search:golden": "pnpm --filter @pathfinder/search exec vitest run --config vitest.golden.config.ts",
+    "bench:search": "tsx scripts/bench-search.ts",
     "prepare": "husky"
   },
   "lint-staged": {
@@ -22,6 +25,10 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@pathfinder/core": "workspace:*",
+    "@pathfinder/scraper": "workspace:*",
+    "@pathfinder/search": "workspace:*",
+    "@types/node": "^26.6.3",
     "eslint": "^10.11.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^7.1.1",
@@ -30,6 +37,7 @@
     "husky": "^9.1.7",
     "lint-staged": "^17.6.0",
     "prettier": "^3.9.9",
+    "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "typescript-eslint": "^8.70.1"
   },

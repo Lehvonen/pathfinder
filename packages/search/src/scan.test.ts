@@ -39,6 +39,14 @@ describe('scan', () => {
     expect(scan(tier1, parse('lei'), 0, 20).items).toEqual([4, 5, 6]);
   });
 
+  it('skips mid-word occurrences of a short word, within an item and across items', async () => {
+    const h = await buildHaystack(
+      ['kevytmaito 1l', 'kevytmaito maito', 'valio maitorahka'],
+      noYield,
+    );
+    expect(scan(h, parse('ma'), 0, 20).items).toEqual([1, 2]);
+  });
+
   it('matches a word at the start of the first item', () => {
     expect(scan(tier1, parse('pi'), 0, 20).items).toEqual([0, 1, 2, 3, 5, 9, 11]);
   });
@@ -79,6 +87,18 @@ describe('scan', () => {
   });
 });
 
+describe('scan exclusions', () => {
+  it('leaves out matching items that contain an excluded text, without ending the scan', async () => {
+    const h = await buildHaystack(
+      ['Pirkka kana', 'Pirkka vapaan kanan munia', 'Pirkka porkkana 1kg', 'Kana-caesar salaatti'],
+      noYield,
+    );
+    const using = prepareAliases({ kana: ['-muna', '-munia', '-porkkana'] });
+    expect(scan(h, parse('kana ', using), 0, 20).items).toEqual([0, 3]);
+    expect(scan(h, parse('kana ', using), 0, 1)).toEqual({ items: [0], next: 1 });
+  });
+});
+
 describe('scan cost', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -98,6 +118,14 @@ describe('scan cost', () => {
     const seeks = spyOnSeeks();
     scan(tier1, parse('maito xyzq'), 0, 20);
     expect(seeks().map(([needle]) => needle)).toEqual(['maito', 'xyzq']);
+  });
+
+  it('never searches for a needle that starts with a space', () => {
+    // " xy" would stop at every space in the text; "xy" plus a space check is ~30× faster
+    const seeks = spyOnSeeks();
+    scan(tier1, parse('maito xy'), 0, 20);
+    scan(tier1, parse('pi le'), 0, 20);
+    expect(seeks().filter(([needle]) => String(needle).startsWith(' '))).toEqual([]);
   });
 
   it('only ever moves each cursor forward', () => {

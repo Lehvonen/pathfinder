@@ -1,9 +1,10 @@
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    // Until the first module lands, an empty suite must not fail CI.
-    passWithNoTests: true,
+    // Golden tests read the real generated catalogue and run only with `pnpm search:golden`
+    // (vitest.golden.config.ts): a re-scrape must not turn CI red.
+    exclude: [...configDefaults.exclude, 'src/**/*.golden.test.ts'],
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],

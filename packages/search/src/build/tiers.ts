@@ -147,7 +147,7 @@ function sizes<K, V>(groups: ReadonlyMap<K, readonly V[]>): Map<K, number> {
 }
 
 /** Category id → its top-level ancestor's id, memoised. */
-function topLevels(categories: readonly Category[]): (id: number) => number {
+export function topLevels(categories: readonly Category[]): (id: number) => number {
   const parentOf = new Map(categories.map((c) => [c.id, c.parentId]));
   const memo = new Map<number, number>();
   const topLevelOf = (id: number): number => {

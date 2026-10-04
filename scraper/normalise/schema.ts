@@ -44,6 +44,13 @@ export const categorySchema = z.strictObject({
   parentId: id.optional(),
 });
 
+/**
+ * data/normalised/popularity.json: EAN → Kesko popularity score, read by the search
+ * build. `null` means unranked; a score of 0 is written as `null`, never as 0
+ * (ARCHITECTURE.md §6).
+ */
+export const popularitySchema = z.record(ean, z.number().positive().nullable());
+
 // ── Curation files (data/curation/) ──────────────────────────
 
 export const curatedDepartmentsSchema = z.array(

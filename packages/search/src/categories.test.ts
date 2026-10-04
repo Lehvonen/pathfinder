@@ -52,6 +52,17 @@ describe('category matching', () => {
   });
 });
 
+describe('category exclusions', () => {
+  it('leaves out a category whose name contains an excluded text', () => {
+    const using = createCategoryIndex([category(1, 'Broileri'), category(2, 'Kananmunat')], {
+      1: 0,
+      2: 0,
+    });
+    const query = parseQuery('kana ', prepareAliases({ kana: ['broileri', '-muna'] }));
+    expect(using.match(query).map((c) => c.name)).toEqual(['Broileri']);
+  });
+});
+
 describe('category ordering', () => {
   it('orders by score: exact, then all word starts, then anywhere', () => {
     const using = createCategoryIndex(

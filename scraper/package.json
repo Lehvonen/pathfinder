@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./schema": "./normalise/schema.ts"
+  },
   "scripts": {
     "export:kupittaa": "bun run export-kupittaa.ts",
     "normalise": "bun run normalise.ts",

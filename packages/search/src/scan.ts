@@ -8,7 +8,9 @@ export type ScanResult = {
   next: number | null;
 };
 
-type Cursor = { needle: string; item: number };
+type Cursor = { term: string; wordStart: boolean; item: number };
+
+const SPACE = 32;
 
 /**
  * Finds the first `limit` items from `from` that match every slot of `query`
@@ -21,7 +23,8 @@ type Cursor = { needle: string; item: number };
  * at most one pass per alternative, and a rare word ends the scan quickly instead of
  * being re-checked for every match of a common one.
  *
- * An empty query matches every item; `filter` rejects items without ending the scan.
+ * An empty query matches every item; `filter` and the query's `exclude` texts reject
+ * items without ending the scan.
  */
 export function scan(
   haystack: Haystack,
@@ -30,12 +33,31 @@ export function scan(
   limit: number,
   filter?: (item: number) => boolean,
 ): ScanResult {
+  const { text, starts } = haystack;
   const slots: Cursor[][] = query.slots.map((slot) =>
-    slot.alternatives.map(({ needle }) => ({ needle, item: -1 })),
+    slot.alternatives.map(({ term, mode }) => ({
+      term,
+      wordStart: mode === 'word-start',
+      item: -1,
+    })),
   );
   const seek = (cursor: Cursor, fromItem: number) => {
-    const position = haystack.text.indexOf(cursor.needle, haystack.starts[fromItem]);
+    const start = starts[fromItem]!; // the item's leading space
+    let position = text.indexOf(cursor.term, cursor.wordStart ? start + 1 : start);
+    // A word-start match needs a space before it. Searching for " " + term would stop at
+    // every space in the text, the commonest character; the term itself is far rarer, so
+    // a short word that matches nothing costs ~0.05 ms instead of ~2 ms.
+    while (cursor.wordStart && position !== -1 && text.charCodeAt(position - 1) !== SPACE) {
+      position = text.indexOf(cursor.term, position + 1);
+    }
     cursor.item = position === -1 ? Infinity : itemAt(haystack, position);
+  };
+
+  // Checked on matching items only, within the item's own text.
+  const isExcluded = (item: number) => {
+    if (query.exclude.length === 0) return false;
+    const own = text.slice(starts[item], starts[item + 1]);
+    return query.exclude.some((term) => own.includes(term));
   };
 
   const items: number[] = [];
@@ -59,7 +81,7 @@ export function scan(
         }
       }
     }
-    if (!filter || filter(candidate)) {
+    if (!isExcluded(candidate) && (!filter || filter(candidate))) {
       items.push(candidate);
       if (items.length === limit) {
         const next = candidate + 1;
