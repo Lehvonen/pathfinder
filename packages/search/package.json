@@ -1,0 +1,22 @@
+{
+  "name": "@pathfinder/search",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./build": "./src/build/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@pathfinder/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^5.0.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.2"
+  }
+}
