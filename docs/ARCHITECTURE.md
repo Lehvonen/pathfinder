@@ -156,7 +156,7 @@ Revisit only after submission, if the app is actually being used.
 │
 ├── scripts/
 │   ├── validate-data.ts     Zod schemas + graph integrity checks
-│   ├── build-data.ts        scraper output → data/build/, stamps version
+│   ├── build-data.ts        data/normalised/ + data/graph/ → data/build/, stamps version
 │   └── seed-synthetic.ts    deterministic 50k-product / 400-node fixture (planned)
 │
 ├── .env.example             committed; VITE_DATA_SOURCE etc.
@@ -812,10 +812,13 @@ edits.
 
 ### Data build command
 
-`pnpm data:build` — takes scraper output, normalises it, validates it, writes
-`data/build/`, and stamps a version. Generated artefacts are committed, so the
-command that produces them must be reproducible and named. Run locally; CI verifies
-rather than regenerates.
+`pnpm data:build` — reads the committed `data/normalised/` output and the graph,
+validates them, writes `data/build/`, and stamps a version. It does not normalise:
+that is the step before it, `bun run scraper/normalise.ts` (§7 step 2), run by hand
+after a scrape. So `data:build` needs neither Bun nor the gitignored scrape cache, and
+anyone on the team can run it. Generated artefacts are committed, so the command that
+produces them must be reproducible and named. Run locally; CI verifies rather than
+regenerates.
 
 ### Data budget and bundle tiering
 
