@@ -94,7 +94,8 @@ describe('startSearchEngine', () => {
     files[2].resolve(tiers[2]);
     await finished;
     expect(eans(engine)).toEqual(['10', '20', '30']);
-    expect(engine.getVersion()).toBe(3);
+    // three tiers, then the typo vocabulary, which the engine builds once all tiers are in
+    await vi.waitFor(() => expect(engine.getVersion()).toBe(4));
   });
 
   it('never calls back or adds tiers once cancelled', async () => {
