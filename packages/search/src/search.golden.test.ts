@@ -84,6 +84,15 @@ describe('aliases', () => {
     expect(categoryNames(r)).toContain('WC-paperit');
   });
 
+  it('kana finds every chicken product, kana itself included, but no eggs, carrots or sheets', () => {
+    // aliases widen: "kana" is searched too, and -muna, -porkkana, -lakana… keep the rest out
+    const all = engine.search('kana ', 2000);
+    expect(all.products.map((p) => p.name)).toContain('Pirkka suomalainen kanan jauheliha 400g');
+    expect(all.products.map((p) => p.name)).toContain('Hetki Suosikkisalaatti kana-caesar 230g');
+    expect(names(all).filter((name) => /muna|munia|porkkana|lakana/.test(name))).toEqual([]);
+    expect(categoryNames(all)).not.toContain('Kananmunat');
+  });
+
   it('kana means chicken from the first keystroke, never eggs', () => {
     for (const raw of ['kana', 'kana ']) {
       const top = engine

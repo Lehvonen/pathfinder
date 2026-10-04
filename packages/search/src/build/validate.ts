@@ -4,7 +4,8 @@ import type { CategoryTop, TierNumber } from '../types';
 import { topLevels, type TierProduct } from './tiers';
 
 export const MAX_ALIAS_KEY_LENGTH = 40;
-export const MAX_ALIAS_TERMS = 8;
+/** Room for a few terms plus the `-text` exclusions a short word like `kana` needs. */
+export const MAX_ALIAS_TERMS = 16;
 
 export type BuildOutput = {
   products: readonly TierProduct[];
