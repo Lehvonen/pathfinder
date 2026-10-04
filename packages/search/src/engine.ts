@@ -40,6 +40,8 @@ export type SearchEngine = {
   searchMore(raw: string, cursor: Cursor, limit?: number): SearchResponse;
   /** Products of one category and its descendants; an empty query lists them all. */
   searchWithin(categoryId: number, raw: string, limit?: number, cursor?: Cursor): SearchResponse;
+  /** Direct sub-categories, for the chips on a category page. */
+  subcategories(categoryId: number): Category[];
   /** Increments whenever a tier lands, so a UI knows to re-run the current query. */
   getVersion(): number;
   subscribe(listener: () => void): () => void;
@@ -137,6 +139,7 @@ export function createSearchEngine(input: SearchEngineInput): SearchEngine {
       const query = parseQuery(raw, aliases);
       return respond(raw, query, [], collect(query, cursor, limit, inCategory));
     },
+    subcategories: (categoryId) => categoryIndex.children(categoryId),
     getVersion: () => version,
     subscribe(listener) {
       listeners.add(listener);

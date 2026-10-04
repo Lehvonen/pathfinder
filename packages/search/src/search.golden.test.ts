@@ -33,10 +33,12 @@ describe('the §14 target: milk first', () => {
     expect(first(engine.search('ma'))).toMatch(/(^| )maito( |$)/);
   });
 
-  it('maito: a 1 l milk first, and "Maitotuotteet", never a top-level category', () => {
+  it('maito: a 1 l milk first, and the milk category "Maidot", never a top-level one', () => {
     const r = search('maito');
     expect(first(r)).toMatch(/maito.* 1l( |$)/);
-    expect(categoryNames(r)[0]).toBe('Maitotuotteet');
+    // "Maidot" via the alias maito → maidot (Finnish t → d), not "Maitotuotteet" (cream)
+    expect(categoryNames(r)[0]).toBe('Maidot');
+    expect(r.categories[0]!.topProducts[0]?.name).toMatch(/maito/);
     expect(r.categories.every((c) => c.category.parentId !== undefined)).toBe(true);
   });
 });
