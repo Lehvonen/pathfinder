@@ -10,7 +10,11 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Category } from '@pathfinder/core';
 import {
+  BENCH_SEQUENCES,
   createSearchEngine,
+  ENGINE_BUDGET_MS,
+  percentile,
+  prefixes,
   type Aliases,
   type CategoryRank,
   type CategoryTop,
@@ -19,32 +23,11 @@ import {
 
 const CORE = fileURLToPath(new URL('../data/build/core/', import.meta.url));
 const RUNS = 50;
-/** The §14 engine budget per keystroke, at p95. */
-const BUDGET_MS = 5;
-
-/** Typing sequences: everyday words, compounds, aliases, multi-word, and no-match cases. */
-const SEQUENCES = [
-  'maito',
-  'leipä',
-  'jauheliha',
-  'vessapaperi',
-  'kana',
-  'maito laktoositon',
-  'maito laktoositonx', // multi-word no-match: the review's slowest case
-  'maito xyzq',
-  'pirkka zzz',
-  'xyz', // single-word no-match: a full pass over every tier
-  'pesuaine',
-  'creme fraiche',
-];
-
 const time = <T>(work: () => T): [T, number] => {
   const start = performance.now();
   const result = work();
   return [result, performance.now() - start];
 };
-const percentile = (sorted: number[], p: number) =>
-  sorted[Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))]!;
 const ms = (value: number) => `${value.toFixed(3)} ms`;
 
 // Loading: parse and index each tier, as the app does.
@@ -68,12 +51,11 @@ for (const tier of [1, 2, 3]) {
 }
 
 // Keystrokes: every prefix of every sequence, RUNS times each after one warm-up pass.
-const prefixes = (text: string) => Array.from(text, (_, i) => text.slice(0, i + 1));
-for (const text of SEQUENCES) for (const prefix of prefixes(text)) engine.search(prefix);
+for (const text of BENCH_SEQUENCES) for (const prefix of prefixes(text)) engine.search(prefix);
 
 const all: number[] = [];
 console.log(`\nPer keystroke, ${RUNS} runs each:`);
-for (const text of SEQUENCES) {
+for (const text of BENCH_SEQUENCES) {
   const times: number[] = [];
   for (const prefix of prefixes(text)) {
     for (let run = 0; run < RUNS; run++) times.push(time(() => engine.search(prefix))[1]);
@@ -90,5 +72,5 @@ all.sort((a, b) => a - b);
 const p95 = percentile(all, 95);
 console.log(
   `\nAll keystrokes: p50 ${ms(percentile(all, 50))}, p95 ${ms(p95)}, max ${ms(all.at(-1)!)}` +
-    ` (budget: p95 under ${BUDGET_MS} ms) ${p95 < BUDGET_MS ? '✓' : '✗'}`,
+    ` (budget: p95 under ${ENGINE_BUDGET_MS} ms) ${p95 < ENGINE_BUDGET_MS ? '✓' : '✗'}`,
 );
