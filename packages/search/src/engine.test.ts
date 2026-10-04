@@ -120,9 +120,10 @@ describe('pages', () => {
 });
 
 describe('match terms', () => {
-  it('lists every term the products were matched on, aliases included', async () => {
+  it('lists every term the products were matched on, the word and its aliases', async () => {
     const engine = await engineWith(1, 2, 3);
     expect(engine.search('vessapaperi ').terms).toEqual([
+      { term: 'vessapaperi', wordStart: false },
       { term: 'wc paperi', wordStart: false },
       { term: 'talouspaperi', wordStart: false },
     ]);
