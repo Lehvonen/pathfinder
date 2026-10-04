@@ -18,27 +18,27 @@ Track C.
 
 Profiled on 2026-10-04 from `data/normalised/` (scrape of 2026-10-03).
 
-| Finding                                                                   | Number                         | Consequence                                                                        |
-| ------------------------------------------------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------- |
-| Searchable products                                                       | 39,479                         | Names only; brand is already part of most names                                    |
-| …in the 14 food top-level categories / the other 13                       | 19,415 / 20,064                | The split the tiers in §3 are built on                                             |
-| Name length                                                               | 41 chars average, 1.6 M total  | The whole name list is small enough to scan                                        |
-| Products with a popularity score                                          | 28,886 (73%)                   | The rest sort last, by name (§6)                                                   |
-| Share of total popularity in the top 1k / 2k / 5k / 10k                   | 47% / 61% / 82% / 94%          | Matches §10's "top 5,000 ≈ 81%"                                                    |
-| "leipä": names containing it / names with a word **starting** with it     | 462 / 87                       | **Finnish compounds: infix matching is required.** Word-prefix misses `ruisleipä`  |
-| "maito": containing / word-prefix                                         | 347 / 250                      | Same: `kevytmaito`, `rasvaton maito`                                               |
-| "maito" substring matches, sorted by popularity                           | top 3 are all 1 l milks        | **Popularity alone already passes the "milk first" target** (§14)                  |
-| Inflected forms (`maitoa`, `maidon`) in names                             | 41                             | Rare in names. Inflection is a query-side problem, handled by aliases              |
-| Ranking `leipä` / `pesuaine` with word-start matches first                | `leipäjuusto` / a rarer soap   | **Rank by popularity only.** The product is the last part of a compound (§5)       |
-| 1–2 letter words matched anywhere: `m` → 29,147 names, top `Kurkku Suomi` | `ma` word-start → a milk first | **Words of 1–2 letters match word starts only** (§5)                               |
-| Names with accents beyond ä/ö/å (`crème fraîche`, `Jamón`, `ø`)           | ~220                           | Fold with Unicode decomposition, not a hand-written table (§5)                     |
-| Linear `String.includes` over every name, per query, PC                   | ~2 ms                          | A phone 10× slower is still inside the 50 ms target, before any index              |
-| Distinct infix substrings (what a FlexSearch `full` tokenizer indexes)    | ~490,000                       | A prebuilt infix index is large; the size may not fit the 3 MB core budget         |
-| Distinct trigrams                                                         | ~9,500                         | A trigram index would be small, if one is needed at all                            |
-| Categories                                                                | 1,042, 27 top-level            | Clean K-Ruoka names: what group results are made of (§4)                           |
-| Category names are plural: `leipä` vs "Leivät", `olut` vs "Oluet"         | no match without aliases       | Aliases apply to category names too (§4)                                           |
-| A leaf category called "Maito"                                            | none                           | `maito` matches "Maitotuotteet" and the top-level "Maito, juusto, munat ja rasvat" |
-| Store departments                                                         | 202                            | Internal names like "(KT 1) Taloustavara": never shown or searched                 |
+| Finding                                                                   | Number                         | Consequence                                                                       |
+| ------------------------------------------------------------------------- | ------------------------------ | --------------------------------------------------------------------------------- |
+| Searchable products                                                       | 39,479                         | Names only; brand is already part of most names                                   |
+| …in the 14 food top-level categories / the other 13                       | 19,415 / 20,064                | The split the tiers in §3 are built on                                            |
+| Name length                                                               | 41 chars average, 1.6 M total  | The whole name list is small enough to scan                                       |
+| Products with a popularity score                                          | 28,886 (73%)                   | The rest sort last, by name (§6)                                                  |
+| Share of total popularity in the top 1k / 2k / 5k / 10k                   | 47% / 61% / 82% / 94%          | Matches §10's "top 5,000 ≈ 81%"                                                   |
+| "leipä": names containing it / names with a word **starting** with it     | 462 / 87                       | **Finnish compounds: infix matching is required.** Word-prefix misses `ruisleipä` |
+| "maito": containing / word-prefix                                         | 347 / 250                      | Same: `kevytmaito`, `rasvaton maito`                                              |
+| "maito" substring matches, sorted by popularity                           | top 3 are all 1 l milks        | **Popularity alone already passes the "milk first" target** (§14)                 |
+| Inflected forms (`maitoa`, `maidon`) in names                             | 41                             | Rare in names. Inflection is a query-side problem, handled by aliases             |
+| Ranking `leipä` / `pesuaine` with word-start matches first                | `leipäjuusto` / a rarer soap   | **Rank by popularity only.** The product is the last part of a compound (§5)      |
+| 1–2 letter words matched anywhere: `m` → 29,147 names, top `Kurkku Suomi` | `ma` word-start → a milk first | **Words of 1–2 letters match word starts only** (§5)                              |
+| Names with accents beyond ä/ö/å (`crème fraîche`, `Jamón`, `ø`)           | ~220                           | Fold with Unicode decomposition, not a hand-written table (§5)                    |
+| Linear `String.includes` over every name, per query, PC                   | ~2 ms                          | A phone 10× slower is still inside the 50 ms target, before any index             |
+| Distinct infix substrings (what a FlexSearch `full` tokenizer indexes)    | ~490,000                       | A prebuilt infix index is large; the size may not fit the 3 MB core budget        |
+| Distinct trigrams                                                         | ~9,500                         | A trigram index would be small, if one is needed at all                           |
+| Categories                                                                | 1,042, 27 top-level            | Clean K-Ruoka names: what group results are made of (§4)                          |
+| Category names are plural: `leipä` vs "Leivät", `olut` vs "Oluet"         | no match without aliases       | Aliases apply to category names too (§4)                                          |
+| A leaf category called "Maito"                                            | none; milk is "Maidot"         | `maito` misses "Maidot" (t → d) without the alias `maito → maidot` (§5.2)         |
+| Store departments                                                         | 202                            | Internal names like "(KT 1) Taloustavara": never shown or searched                |
 
 The infix rows matter most. §17 decided on prebuilt FlexSearch indexes because "index
 build at startup … is what misses the target at 50k products on an old phone". At 39k
@@ -123,8 +123,8 @@ _Agreed 2026-10-04._
 - **The most specific category wins.** When both a category and one of its descendants
   match, the ancestor is dropped; the rest are ordered by how exactly the name matches,
   then deeper first, then by the popularity of their best product. `maito` gives
-  "Maitotuotteet", not all of dairy, so "add maito" does not become "add the whole dairy
-  department".
+  "Maidot" (through the alias `maito → maidot`), not all of dairy, so "add maito" does not
+  become "add the whole dairy department".
 - **Categories, not store departments.** The 1,042 K-Ruoka categories have names
   shoppers recognise; the store's department names are internal and never searched.
 - **A category result has two actions:**
@@ -241,7 +241,7 @@ are updated in the same commit as new data.
 On the real catalogue:
 
 - **The §14 target**: `ma` and `maito` put a milk first; `maito`'s first category is
-  "Maitotuotteet", never a top-level category.
+  "Maidot", never a top-level category.
 - Compounds: `leipä` finds `ruisleipä` first; `maito` finds `kevytmaito`.
 - Folding: `leipa` and `leipä` return identical results; `creme fraiche` finds products.
 - Aliases: `vessapaperi` finds at least 5 products.

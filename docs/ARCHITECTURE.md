@@ -557,7 +557,7 @@ design and the measurements behind it are in `docs/plans/search.md`.
   `ma` puts the most-bought milk first. Unranked products sort after ranked ones. No
   boosts: a boost would break the pre-sorted order the scan depends on.
 - **Category results** — a query that matches a category name shows the category above
-  the products, at most three, most specific first ("Maitotuotteet", not all of dairy).
+  the products, at most three, most specific first ("Maidot", not all of dairy).
   Each offers **add as a generic entry** (resolved through `CategoryPlacement`, §6) and
   **browse**: a page of that category's products with its own search bar. Category
   names never change how products rank. Store department names are never searched.
