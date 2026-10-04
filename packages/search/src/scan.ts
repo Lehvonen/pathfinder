@@ -23,7 +23,8 @@ const SPACE = 32;
  * at most one pass per alternative, and a rare word ends the scan quickly instead of
  * being re-checked for every match of a common one.
  *
- * An empty query matches every item; `filter` rejects items without ending the scan.
+ * An empty query matches every item; `filter` and the query's `exclude` texts reject
+ * items without ending the scan.
  */
 export function scan(
   haystack: Haystack,
@@ -52,6 +53,13 @@ export function scan(
     cursor.item = position === -1 ? Infinity : itemAt(haystack, position);
   };
 
+  // Checked on matching items only, within the item's own text.
+  const isExcluded = (item: number) => {
+    if (query.exclude.length === 0) return false;
+    const own = text.slice(starts[item], starts[item + 1]);
+    return query.exclude.some((term) => own.includes(term));
+  };
+
   const items: number[] = [];
   let candidate = from;
   for (;;) {
@@ -73,7 +81,7 @@ export function scan(
         }
       }
     }
-    if (!filter || filter(candidate)) {
+    if (!isExcluded(candidate) && (!filter || filter(candidate))) {
       items.push(candidate);
       if (items.length === limit) {
         const next = candidate + 1;

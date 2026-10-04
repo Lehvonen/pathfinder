@@ -151,8 +151,13 @@ query ──► normalise ──► aliases ──► match ──► rank ─�
 2. **Aliases** (`aliases.json`, hand-maintained): map a query to one or more search terms,
    e.g. `maitoa → maito`, `kevari → kevytmaito`, `jogu → jogurtti`. Applied to whole
    query words; the word still being typed also picks up aliases whose key starts with
-   it, once it has 4+ letters (`vessap` already finds `wc-paperi`). Aliases widen what
-   matches; they do not boost.
+   it, once it has 4+ letters (`vessap` already finds `wc-paperi`), unless it has an
+   alias of its own (`kana` means chicken from the first keystroke, not the start of
+   `kananmuna`). Aliases widen what matches and never drop the typed word; they do not
+   boost. A term written **`-text`** excludes instead: a product or category whose name
+   contains the text is left out of that query's results, so `"kana": ["broileri",
+"-muna", "-porkkana", "-lakana"]` finds every chicken product but not eggs (_kanan
+   munia_), carrots (_porkkana_) or bed sheets (_lakana_).
 3. **Match.** A query word of 3+ letters matches anywhere in the name (`maito` finds
    `kevytmaito`); a word of 1–2 letters matches only at the start of a word, decided per
    word, so `maito l` narrows to names with a word starting with `l` rather than every

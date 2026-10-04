@@ -87,6 +87,18 @@ describe('scan', () => {
   });
 });
 
+describe('scan exclusions', () => {
+  it('leaves out matching items that contain an excluded text, without ending the scan', async () => {
+    const h = await buildHaystack(
+      ['Pirkka kana', 'Pirkka vapaan kanan munia', 'Pirkka porkkana 1kg', 'Kana-caesar salaatti'],
+      noYield,
+    );
+    const using = prepareAliases({ kana: ['-muna', '-munia', '-porkkana'] });
+    expect(scan(h, parse('kana ', using), 0, 20).items).toEqual([0, 3]);
+    expect(scan(h, parse('kana ', using), 0, 1)).toEqual({ items: [0], next: 1 });
+  });
+});
+
 describe('scan cost', () => {
   afterEach(() => {
     vi.restoreAllMocks();

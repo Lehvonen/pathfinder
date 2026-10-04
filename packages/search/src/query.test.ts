@@ -18,7 +18,12 @@ const terms = (q: ParsedQuery, slot = 0) => q.slots[slot]!.alternatives.map((a) 
 describe('parseQuery', () => {
   it('is empty for an empty or blank query', () => {
     for (const raw of ['', '   ', ' - / ']) {
-      expect(parse(raw)).toEqual({ slots: [], categoryEligible: false, isEmpty: true });
+      expect(parse(raw)).toEqual({
+        slots: [],
+        exclude: [],
+        categoryEligible: false,
+        isEmpty: true,
+      });
     }
   });
 
@@ -57,23 +62,23 @@ describe('parseQuery', () => {
 });
 
 describe('parseQuery aliases', () => {
-  it('replaces a completed word that has an exact alias', () => {
-    expect(terms(parse('vessapaperi '))).toEqual(['wc paperi', 'talouspaperi']);
+  it('widens a completed word with its exact alias, keeping the word itself', () => {
+    expect(terms(parse('vessapaperi '))).toEqual(['vessapaperi', 'wc paperi', 'talouspaperi']);
   });
 
-  it('keeps the word itself when the alias lists it', () => {
-    expect(terms(parse('Leipä '))).toEqual(['leivat', 'leipa']);
+  it('lists the word once even when the alias repeats it', () => {
+    expect(terms(parse('Leipä '))).toEqual(['leipa', 'leivat']);
   });
 
   it('adds aliases of longer keys while a word of 4+ letters is being typed', () => {
     expect(terms(parse('vessap'))).toEqual(['vessap', 'wc paperi', 'talouspaperi']);
   });
 
-  it('uses only its own alias when a word being typed has one, ignoring longer keys', () => {
+  it('uses its own alias while being typed, ignoring longer keys', () => {
     // "kana" is chicken; "kananmuna" starting with it must not bring eggs in while typing
-    const using = prepareAliases({ kana: ['broileri', 'kanaa'], kananmuna: ['munia'] });
-    expect(terms(parse('kana', using))).toEqual(['broileri', 'kanaa']);
-    expect(terms(parse('kana ', using))).toEqual(['broileri', 'kanaa']);
+    const using = prepareAliases({ kana: ['broileri'], kananmuna: ['munia'] });
+    expect(terms(parse('kana', using))).toEqual(['kana', 'broileri']);
+    expect(terms(parse('kana ', using))).toEqual(['kana', 'broileri']);
     expect(terms(parse('kanan', using))).toEqual(['kanan', 'munia']);
   });
 
@@ -99,30 +104,54 @@ describe('parseQuery aliases', () => {
 
 describe('parseQuery subsumption', () => {
   const custom = (a: Aliases) => prepareAliases(a);
+  /** The alternatives besides the dummy word "xq" itself, which every alias now keeps. */
+  const aliasTerms = (q: ParsedQuery) => terms(q).filter((term) => term !== 'xq');
 
   it('drops an anywhere term that contains another anywhere term', () => {
     // typing "leip" also brings in leipä's aliases; "leipa" contains "leip"
     expect(terms(parse('leip'))).toEqual(['leip', 'leivat']);
-    expect(terms(parse('x ', custom({ x: ['kevyt', 'kevytmaito'] })))).toEqual(['kevyt']);
+    expect(aliasTerms(parse('xq ', custom({ xq: ['kevyt', 'kevytmaito'] })))).toEqual(['kevyt']);
   });
 
   it('drops a word-start term whose needle contains another word-start needle', () => {
-    expect(terms(parse('x ', custom({ x: ['k', 'ke'] })))).toEqual(['k']);
+    expect(aliasTerms(parse('xq ', custom({ xq: ['k', 'ke'] })))).toEqual(['k']);
   });
 
   it('keeps an anywhere term even when a word-start term is its prefix', () => {
     // " ke" at a word start does not match the "kevyt" inside "luomukevytmaito"
-    expect(terms(parse('x ', custom({ x: ['ke', 'kevyt'] })))).toEqual(['ke', 'kevyt']);
+    expect(aliasTerms(parse('xq ', custom({ xq: ['ke', 'kevyt'] })))).toEqual(['ke', 'kevyt']);
   });
 
   it('keeps a word-start term even when an anywhere term contains it', () => {
     // "wc" matches only at a word start; the phrase "wc paperi" can match mid-word
-    expect(terms(parse('x ', custom({ x: ['wc', 'xwc paperi'] })))).toEqual(['wc', 'xwc paperi']);
+    expect(aliasTerms(parse('xq ', custom({ xq: ['wc', 'xwc paperi'] })))).toEqual([
+      'wc',
+      'xwc paperi',
+    ]);
   });
 });
 
 describe('prepareAliases', () => {
   it('folds keys and terms and drops terms that fold to nothing', () => {
     expect([...prepareAliases({ Leipä: ['Leivät', '—'] })]).toEqual([['leipa', ['leivat']]]);
+  });
+});
+
+describe('parseQuery exclusions', () => {
+  const using = prepareAliases({ kana: ['broileri', '-muna', '-Porkkana'], wc: ['-'] });
+
+  it('collects -term aliases as folded texts to exclude, not as alternatives', () => {
+    const q = parse('kana ', using);
+    expect(terms(q)).toEqual(['kana', 'broileri']);
+    expect(q.exclude).toEqual(['muna', 'porkkana']);
+  });
+
+  it('collects exclusions from every word, once each', () => {
+    expect(parse('kana riisi kana', using).exclude).toEqual(['muna', 'porkkana']);
+  });
+
+  it('has no exclusions without -term aliases, and drops a bare marker', () => {
+    expect(parse('maito', using).exclude).toEqual([]);
+    expect(prepareAliases({ wc: ['-', '- /', 'ok'] }).get('wc')).toEqual(['ok']);
   });
 });

@@ -71,6 +71,7 @@ export function createCategoryIndex(
     const terms = prepareTerms(query);
     const matched: Scored[] = [];
     for (const entry of entries) {
+      if (query.exclude.some((text) => entry.folded.includes(text))) continue;
       const score = scoreName(entry, terms);
       if (score > 0) matched.push({ ...entry, score });
     }
