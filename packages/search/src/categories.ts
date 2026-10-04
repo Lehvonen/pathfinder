@@ -14,7 +14,14 @@ export type CategoryIndex = {
   children(id: number): Category[];
 };
 
-type Entry = { category: Category; folded: string; ancestors: number[]; rank: number };
+type Entry = {
+  category: Category;
+  folded: string;
+  /** `" " + folded`, so a word-start check is one `includes`; built once, not per keystroke. */
+  spaced: string;
+  ancestors: number[];
+  rank: number;
+};
 type Scored = Entry & { score: number };
 
 export function createCategoryIndex(
@@ -38,6 +45,7 @@ export function createCategoryIndex(
     .map((c) => ({
       category: c,
       folded: fold(c.name),
+      spaced: ' ' + fold(c.name),
       ancestors: ancestors(c),
       rank: categoryRank[c.id]!,
     }));
@@ -60,10 +68,10 @@ export function createCategoryIndex(
 
   const match = (query: ParsedQuery): Category[] => {
     if (!query.categoryEligible) return [];
-    const phrase = query.slots.map((s) => s.word).join(' ');
+    const terms = prepareTerms(query);
     const matched: Scored[] = [];
     for (const entry of entries) {
-      const score = scoreName(entry.folded, query, phrase);
+      const score = scoreName(entry, terms);
       if (score > 0) matched.push({ ...entry, score });
     }
     // An ancestor gives way to a matched descendant that scores at least as well, so
@@ -84,21 +92,38 @@ export function createCategoryIndex(
   return { match, subtreeMask, children: (id) => childrenOf.get(id) ?? [] };
 }
 
+/** A query's alternatives in the form the name check needs, built once per keystroke. */
+type QueryTerms = {
+  phrase: string;
+  slots: { needle: string; inSpaced: boolean; atWordStart: string; term: string }[][];
+};
+
+function prepareTerms(query: ParsedQuery): QueryTerms {
+  return {
+    phrase: query.slots.map((s) => s.word).join(' '),
+    slots: query.slots.map((s) =>
+      s.alternatives.map((a: Alternative) => ({
+        needle: a.needle,
+        inSpaced: a.mode === 'word-start',
+        atWordStart: ' ' + a.term,
+        term: a.term,
+      })),
+    ),
+  };
+}
+
 /**
  * 3: the name is exactly the query (or, for one word, exactly one of its aliases);
  * 2: every word matches at a word start; 1: every word matches; 0: no match.
  */
-function scoreName(folded: string, query: ParsedQuery, phrase: string): number {
-  const spaced = ' ' + folded;
-  const has = (a: Alternative) => (a.mode === 'anywhere' ? folded : spaced).includes(a.needle);
-  if (!query.slots.every((s) => s.alternatives.some(has))) return 0;
-  const [only] = query.slots;
-  const exact =
-    folded === phrase ||
-    (query.slots.length === 1 && only!.alternatives.some((a) => a.term === folded));
-  if (exact) return 3;
-  const atWordStart = query.slots.every((s) =>
-    s.alternatives.some((a) => spaced.includes(' ' + a.term)),
+function scoreName({ folded, spaced }: Entry, { phrase, slots }: QueryTerms): number {
+  const matches = slots.every((alts) =>
+    alts.some((a) => (a.inSpaced ? spaced : folded).includes(a.needle)),
   );
+  if (!matches) return 0;
+  const exact =
+    folded === phrase || (slots.length === 1 && slots[0]!.some((a) => a.term === folded));
+  if (exact) return 3;
+  const atWordStart = slots.every((alts) => alts.some((a) => spaced.includes(a.atWordStart)));
   return atWordStart ? 2 : 1;
 }
