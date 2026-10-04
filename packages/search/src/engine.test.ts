@@ -199,6 +199,14 @@ describe('searchWithin', () => {
   });
 });
 
+describe('subcategories', () => {
+  it('lists direct sub-categories only, and none for a leaf', async () => {
+    const engine = await engineWith();
+    expect(engine.subcategories(2).map((c) => c.name)).toEqual(['Maidot', 'Juustot']);
+    expect(engine.subcategories(10)).toEqual([]);
+  });
+});
+
 describe('version and subscribe', () => {
   it('increments the version and notifies listeners when a tier lands', async () => {
     const engine = await engineWith();
