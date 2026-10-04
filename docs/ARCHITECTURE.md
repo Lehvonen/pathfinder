@@ -271,6 +271,13 @@ summarised in §17, but where the two differ, `types.ts` is authoritative.
   one of those is `isPrimary`; that is the one routing uses.
 - **A placement names a shelf, not a node.** The access node comes from the shelf's
   `accessNodeId` in the graph, derived at build time, so the two cannot disagree.
+- **A shelf ID is `<departmentId>:<shelf>`**, e.g. `91208:05`. Shelf numbers repeat in
+  every department, so the number printed on the shelf is only the part after the
+  colon. The K-Ruoka department id is used rather than the name, because names carry
+  notes such as "KORVAA ITSE" that change. Shelf `00` means the store records only the
+  department (48% of products at Kupittaa); `<departmentId>:00` is the
+  **department-wide shelf**, drawn as one polygon over the department area, so those
+  products route to the department without a change to `types.ts`.
 - **`temperature` on category** drives the frozen-last routing constraint.
 - **Both entry kinds are supported; generic is the default.** People write "maito",
   not a specific SKU, and which carton gets picked is decided at the shelf. Forcing
@@ -1114,6 +1121,7 @@ time to fix what it reveals.
 | Rendering code                             | Pure geometry in `core`, React SVG in `map-render`                                                                                                                    | `core` stays framework-free                                                                                                                                           |
 | Graph source                               | `data/graph/` per section; merged into `data/build/core/graph.json`                                                                                                   | Parallel mapping without conflicts; hand-edited and generated files kept apart                                                                                        |
 | Placement → node                           | Placement stores `shelfId` only; node derived from `Shelf.accessNodeId` at build time                                                                                 | One source of truth for where you stand to reach a shelf                                                                                                              |
+| Shelf ID format                            | `<departmentId>:<shelf>`; `:00` is the department-wide shelf, drawn as one area                                                                                       | Shelf numbers repeat in every department; about half of all products have a department but no shelf, and this routes them without a type change                       |
 | Core placement data                        | `EAN → { nodeId, categoryId }` plus `CategoryPlacement`, both core tier                                                                                               | Core alone must resolve every list entry and apply the frozen-last constraint                                                                                         |
 | Search index payload                       | `{ ean, name }`                                                                                                                                                       | Offline results render a name without the display tier                                                                                                                |
 | Search ranking and loading                 | **Ranked by Kesko popularity.** A **hot index** of the most popular products loads first; the **full index** loads in a Web Worker straight after. **Both precached** | Speed over size: nobody should wait to find milk. Popularity decides load order, not what is offline, so full offline search is kept                                  |
