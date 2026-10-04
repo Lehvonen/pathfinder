@@ -9,6 +9,7 @@ import {
   categorySchema,
   curatedDepartmentsSchema,
   placementSchema,
+  popularitySchema,
   productSchema,
   validateNormalised,
   type NormalisedData,
@@ -159,5 +160,22 @@ describe('validateNormalised', () => {
     expect(validateNormalised(data)).toEqual([
       expect.stringMatching(/^product 6410405000001: name /),
     ]);
+  });
+});
+
+describe('popularitySchema', () => {
+  it('accepts positive scores and null for unranked products', () => {
+    expect(popularitySchema.safeParse({ [MILK]: 22234.8, [BREAD]: null }).success).toBe(true);
+    expect(popularitySchema.safeParse({}).success).toBe(true);
+  });
+
+  it('rejects 0, which must be written as null, and other non-positive or non-numbers', () => {
+    for (const score of [0, -1, '12', undefined]) {
+      expect(popularitySchema.safeParse({ [MILK]: score }).success).toBe(false);
+    }
+  });
+
+  it('rejects a key that is not an EAN', () => {
+    expect(popularitySchema.safeParse({ 'not-an-ean': 5 }).success).toBe(false);
   });
 });
