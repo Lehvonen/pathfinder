@@ -79,6 +79,7 @@ describe('search across tiers', () => {
       products: [],
       cursor: null,
       pendingTiers: [2, 3],
+      terms: [],
     });
   });
 
@@ -115,6 +116,30 @@ describe('pages', () => {
     const more = engine.searchMore('maito', { tier: 2, next: 0 });
     expect(more.products).toEqual([]);
     expect(more.cursor).toEqual({ tier: 2, next: 0 });
+  });
+});
+
+describe('match terms', () => {
+  it('lists every term the products were matched on, aliases included', async () => {
+    const engine = await engineWith(1, 2, 3);
+    expect(engine.search('vessapaperi ').terms).toEqual([
+      { term: 'wc paperi', wordStart: false },
+      { term: 'talouspaperi', wordStart: false },
+    ]);
+  });
+
+  it('marks 1–2 letter words as matched at word starts only', async () => {
+    expect((await engineWith(1)).search('maito l').terms).toEqual([
+      { term: 'maito', wordStart: false },
+      { term: 'l', wordStart: true },
+    ]);
+  });
+
+  it('includes the terms in searchMore and searchWithin responses too', async () => {
+    const engine = await engineWith(1);
+    const expected = [{ term: 'maito', wordStart: false }];
+    expect(engine.searchMore('maito', { tier: 1, next: 0 }).terms).toEqual(expected);
+    expect(engine.searchWithin(3, 'maito').terms).toEqual(expected);
   });
 });
 

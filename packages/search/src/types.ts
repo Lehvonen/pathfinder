@@ -38,6 +38,9 @@ export type CategoryHit = {
   topProducts: ProductRef[];
 };
 
+/** A folded term the query matched, for highlighting it in a product name. */
+export type MatchTerm = { term: string; wordStart: boolean };
+
 /** Where "show more" continues: the next index to scan in `tier`. */
 export type Cursor = { tier: TierNumber; next: number };
 
@@ -52,6 +55,8 @@ export type SearchResponse = {
   pendingTiers: TierNumber[];
   /** `null` means there is nothing more to show, ever. */
   cursor: Cursor | null;
+  /** Every term the products were matched on, aliases included, to highlight them. */
+  terms: MatchTerm[];
   /** Set when typo correction ran: the response is for `to`, not what was typed. */
   corrected?: { from: string; to: string };
 };

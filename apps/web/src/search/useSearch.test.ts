@@ -41,6 +41,7 @@ describe('canShowMore', () => {
     products: [],
     pendingTiers: [],
     cursor: null,
+    terms: [],
     ...overrides,
   });
 
