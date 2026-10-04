@@ -309,6 +309,7 @@ the 1 MB the build allows.
 | First build                                    | 0.333 ms | 1.372 ms | 2.692 ms |
 | Short words found without searching for spaces | 0.335 ms | 1.096 ms | 1.756 ms |
 | Category strings built once                    | 0.054 ms | 0.792 ms | 1.479 ms |
+| Typo correction and alias exclusions measured  | 0.272 ms | 1.146 ms | 2.911 ms |
 
 What changed:
 
@@ -318,8 +319,12 @@ What changed:
 - **Category strings.** Every keystroke built 1,042 category strings; building them once
   made the typical keystroke 6× faster (p50: 0.333 → 0.054 ms).
 
-Slowest sequence now: `vessapaperi`, p95 1.3 ms. While "vess…" is typed, the scan passes over
-the text for several alias terms before it finds a match.
+Slowest sequences now: `maito laktoositonx` and `maito xyzq`, p95 1.8–1.9 ms, max 2.9 ms.
+They find almost nothing, so typo correction searches a second time (and `maito
+laktoositonx` then finds lactose-free milk); and `vessapaperi`, p95 1.3 ms, where the scan
+passes over the text for several alias terms while "vess…" is typed. The last row is the
+first run that measures typo correction: earlier runs timed the keystrokes before its
+vocabulary (ready ~30 ms after tier 3) existed, so it never ran.
 
 At 10× slower, a typical old phone would see p95 ≈ 8 ms: inside the 50 ms
 keystroke → results target, slightly above this plan's 5 ms engine budget. Whether anything
@@ -339,10 +344,11 @@ What exists for it:
   engine alone, tier 1 ready time, and the longest freeze while tiers 2–3 load.
 - **How to run it** on a phone on the same wifi as the PC (PowerShell):
   `$env:VITE_BENCH='1'; pnpm --filter @pathfinder/web build; pnpm --filter @pathfinder/web preview --host`,
-  then open `http://<PC address>:4173/?bench`, wait for "kaikki tasot ladattu" and tap
+  then open `http://<PC address>:4173/?bench`, wait for "kaikki tasot ja kirjoitusvirheiden korjaus ladattu" and tap
   "Aja testi". A normal production build does not contain the benchmark.
-- **The only run so far** is headless Chromium on the development PC, production build:
-  keystroke → painted p50 5.9 ms / p95 6.7 ms / max 9.6 ms; engine p95 1.1 ms; tier 1 ready
-  88 ms after opening; no long tasks while tiers loaded.
+- **The only runs so far** are headless Chromium on the development PC, production build.
+  Latest, with typo correction ready: keystroke → painted p50 5.7 ms / p95 6.6 ms / max
+  8.8 ms; engine p95 1.2 ms; tier 1 ready 113 ms after opening; no long tasks while tiers
+  loaded.
 
 When it is done: record the phone, browser and numbers here, then close the §17 question.

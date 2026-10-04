@@ -47,6 +47,8 @@ export type SearchEngine = {
   subcategories(categoryId: number): Category[];
   /** Increments whenever a tier or the typo vocabulary lands, so a UI re-runs the query. */
   getVersion(): number;
+  /** Whether typo correction can run: every tier is in and its vocabulary is built. */
+  typoReady(): boolean;
   subscribe(listener: () => void): () => void;
 };
 
@@ -181,6 +183,7 @@ export function createSearchEngine(input: SearchEngineInput): SearchEngine {
     },
     subcategories: (categoryId) => categoryIndex.children(categoryId),
     getVersion: () => version,
+    typoReady: () => vocabulary !== null,
     subscribe(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);

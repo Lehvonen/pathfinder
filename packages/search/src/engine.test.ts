@@ -238,6 +238,13 @@ describe('typo correction', () => {
     expect(r.query).toBe('kevytmatio ');
   });
 
+  it('reports when typo correction is ready: every tier in, vocabulary built', async () => {
+    const engine = await engineWith(1, 2);
+    expect(engine.typoReady()).toBe(false);
+    await engine.addTier(tiers[3]);
+    await vi.waitFor(() => expect(engine.typoReady()).toBe(true));
+  });
+
   it('does nothing before every tier and the vocabulary are in', async () => {
     const r = (await engineWith(1, 2)).search('kevytmatio');
     expect(r.products).toEqual([]);

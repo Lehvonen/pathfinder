@@ -50,6 +50,12 @@ for (const tier of [1, 2, 3]) {
   );
 }
 
+// The engine builds the typo vocabulary in idle chunks after the last tier; wait for it,
+// or the keystrokes below would never reach typo correction.
+const vocabularyStart = performance.now();
+while (!engine.typoReady()) await new Promise((resolve) => setTimeout(resolve, 0));
+console.log(`  typo vocabulary: ready ${ms(performance.now() - vocabularyStart)} after tier 3`);
+
 // Keystrokes: every prefix of every sequence, RUNS times each after one warm-up pass.
 for (const text of BENCH_SEQUENCES) for (const prefix of prefixes(text)) engine.search(prefix);
 

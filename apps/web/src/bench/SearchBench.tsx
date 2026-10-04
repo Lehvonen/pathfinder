@@ -45,9 +45,10 @@ function SearchBench() {
   const waiting = useRef<{ query: string; resolve(): void } | null>(null);
   const [report, setReport] = useState<Report | null>(null);
   const [running, setRunning] = useState(false);
-  const allLoaded = search.response?.pendingTiers.length === 0;
+  // Everything the timed keystrokes use, typo correction included.
+  const allLoaded = search.response?.pendingTiers.length === 0 && !!engine?.typoReady();
   let status = 'ladataan…';
-  if (allLoaded) status = 'kaikki tasot ladattu';
+  if (allLoaded) status = 'kaikki tasot ja kirjoitusvirheiden korjaus ladattu';
   else if (engine) status = 'taso 1 valmis, ladataan muita…';
 
   // Time from navigation until tier 1 is searchable.
