@@ -135,13 +135,18 @@ describe('splitTiers', () => {
     expect(ids(tiers[1])).toEqual(['11:90', '10:80', '21:50', '20:40']);
   });
 
-  it('puts the rest of the ranked food in tier 2 before any other product', () => {
-    expect(ids(tiers[2]).filter((id) => id.startsWith('10:'))).toEqual(['10:70', '10:60']);
+  it('puts all the rest of the ranked food in tier 2 before any other product', () => {
+    // 30:99 is more popular than every leftover food product, and still comes after them
+    const isFood = (id: string) => id.startsWith('10:') || id.startsWith('20:');
+    const tier2 = ids(tiers[2]);
+    const firstOther = tier2.findIndex((id) => !isFood(id));
+    expect(tier2.slice(0, firstOther).every(isFood)).toBe(true);
+    expect(tier2.slice(firstOther).some(isFood)).toBe(false);
   });
 
   it('fills the remaining tier 2 places with an equal share per other category', () => {
-    // 6 places - 2 food = 4, so 2 each for 30 and 40; tier 2 is in rank order
-    expect(ids(tiers[2])).toEqual(['30:99', '10:70', '10:60', '30:30', '40:20', '40:10']);
+    // 6 places - 2 food = 4, so 2 each for 30 and 40; food first, each part in rank order
+    expect(ids(tiers[2])).toEqual(['10:70', '10:60', '30:99', '30:30', '40:20', '40:10']);
   });
 
   it('keeps excluded categories and unranked products out of tiers 1–2', () => {

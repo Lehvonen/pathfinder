@@ -49,8 +49,10 @@ export type TierProduct = RankedProduct & { categoryId: number };
 /**
  * Splits products into tiers 1–3, each in rank order:
  * 1. the most popular food, an equal share of `tier1Size` per food top-level category;
- * 2. every other ranked food product, then an equal share of what is left of
- *    `tier2Size` per remaining top-level category (not food, not excluded);
+ * 2. every other ranked food product, **then** an equal share of what is left of
+ *    `tier2Size` per remaining top-level category (not food, not excluded): all food comes
+ *    before any non-food product, each part in rank order, so a popular non-food product
+ *    never pushes food off the first page (docs/plans/search.md §3);
  * 3. everything else, including every unranked product.
  */
 export function splitTiers<T extends TierProduct>(
@@ -81,20 +83,22 @@ export function splitTiers<T extends TierProduct>(
     for (const product of group.slice(0, foodShares.get(top))) tier1.add(product);
   }
 
-  const tier2 = new Set<T>();
+  const tier2Food = new Set<T>();
   for (const group of foodGroups.values()) {
-    for (const product of group) if (!tier1.has(product)) tier2.add(product);
+    for (const product of group) if (!tier1.has(product)) tier2Food.add(product);
   }
-  const room = Math.max(0, options.tier2Size - tier2.size);
+  const tier2Other = new Set<T>();
+  const room = Math.max(0, options.tier2Size - tier2Food.size);
   const otherShares = equalShare(sizes(otherGroups), room);
   for (const [top, group] of otherGroups) {
-    for (const product of group.slice(0, otherShares.get(top))) tier2.add(product);
+    for (const product of group.slice(0, otherShares.get(top))) tier2Other.add(product);
   }
 
+  const inTier1Or2 = (p: T) => tier1.has(p) || tier2Food.has(p) || tier2Other.has(p);
   return {
     1: sorted.filter((p) => tier1.has(p)),
-    2: sorted.filter((p) => tier2.has(p)),
-    3: sorted.filter((p) => !tier1.has(p) && !tier2.has(p)),
+    2: [...sorted.filter((p) => tier2Food.has(p)), ...sorted.filter((p) => tier2Other.has(p))],
+    3: sorted.filter((p) => !inTier1Or2(p)),
   };
 }
 
