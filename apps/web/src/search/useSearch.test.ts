@@ -1,6 +1,11 @@
-import { createSearchEngine, type SearchResponse, type TierData } from '@pathfinder/search';
+import {
+  createSearchEngine,
+  PAGE_SIZE,
+  type SearchResponse,
+  type TierData,
+} from '@pathfinder/search';
 import { describe, expect, it } from 'vitest';
-import { canShowMore, runSearch } from './useSearch';
+import { canShowMore, firstRows, nextRows, rowsFor, runSearch } from './useSearch';
 
 const milks = (tier: 1 | 2, count: number): TierData => ({
   version: 1,
@@ -65,5 +70,34 @@ describe('canShowMore', () => {
     expect(canShowMore(runSearch(engine, 'maito', 40, 1))).toBe(false);
     await engine.addTier(milks(2, 5));
     expect(canShowMore(runSearch(engine, 'maito', 40, 2))).toBe(false); // tier 3 pending
+  });
+});
+
+describe('row count', () => {
+  it('starts a query at one page', () => {
+    expect(firstRows('maito')).toEqual({ query: 'maito', count: PAGE_SIZE });
+  });
+
+  it('keeps the same rows object while the query is unchanged', () => {
+    const rows = nextRows(firstRows('maito'));
+    expect(rowsFor(rows, 'maito')).toBe(rows);
+  });
+
+  it('adds one page on "show more", for the same query', () => {
+    expect(nextRows(nextRows(firstRows('maito')))).toEqual({
+      query: 'maito',
+      count: 3 * PAGE_SIZE,
+    });
+  });
+
+  it('starts again at one page when the query changes', () => {
+    expect(rowsFor(nextRows(firstRows('maito')), 'maitox')).toEqual(firstRows('maitox'));
+  });
+
+  it('starts at one page when going back to an earlier query (A → B → A)', () => {
+    // The hook stores what rowsFor returns, so B's rows replace A's 40 before A comes back.
+    const a = nextRows(firstRows('maito')); // 40 rows
+    const b = rowsFor(a, 'maitox');
+    expect(rowsFor(b, 'maito')).toEqual({ query: 'maito', count: PAGE_SIZE });
   });
 });

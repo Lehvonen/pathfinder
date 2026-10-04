@@ -14,16 +14,19 @@ export type SearchState = {
 /**
  * Query state for the search screen (docs/plans/search.md §5). The input stays instant:
  * results are computed from a deferred copy of the query, so React can skip a render
- * when typing outpaces it. The list shows 20 rows, "show more" adds 20, and a new query
- * starts again at 20. When a tier lands, `version` changes and the same query re-runs
- * with the same row count, so the list only grows.
+ * when typing outpaces it. The list shows 20 rows, "show more" adds 20, and every change
+ * of the query starts again at 20, even back to an earlier one. When a tier lands,
+ * `version` changes and the same query re-runs with the same row count, so the list only
+ * grows.
  */
 export function useSearch(engine: SearchEngine | null, version: number): SearchState {
   const [query, setQuery] = useState('');
   const deferred = useDeferredValue(query);
-  // The row count belongs to one query; a different query starts again at one page.
-  const [rows, setRows] = useState({ query: '', count: PAGE_SIZE });
-  const count = rows.query === deferred ? rows.count : PAGE_SIZE;
+  const [stored, setStored] = useState<Rows>(() => firstRows(deferred));
+  const rows = rowsFor(stored, deferred);
+  // A new query forgets the old count right away, so going A → B → A starts A at 20 again.
+  if (rows !== stored) setStored(rows);
+  const { count } = rows;
 
   const response = useMemo(
     () => runSearch(engine, deferred, count, version),
@@ -35,8 +38,27 @@ export function useSearch(engine: SearchEngine | null, version: number): SearchS
     setQuery,
     response,
     canShowMore: canShowMore(response),
-    showMore: () => setRows({ query: deferred, count: count + PAGE_SIZE }),
+    showMore: () => setStored(nextRows(rows)),
   };
+}
+
+/** How many rows the list shows, and for which query. */
+export type Rows = { query: string; count: number };
+
+/** One page of rows for `query`. */
+export function firstRows(query: string): Rows {
+  return { query, count: PAGE_SIZE };
+}
+
+/** The same rows while the query is unchanged (same object, so nothing re-renders);
+ * one page again as soon as it changes. */
+export function rowsFor(rows: Rows, query: string): Rows {
+  return rows.query === query ? rows : firstRows(query);
+}
+
+/** "Show more": one more page of the same query. */
+export function nextRows(rows: Rows): Rows {
+  return { query: rows.query, count: rows.count + PAGE_SIZE };
 }
 
 /**
