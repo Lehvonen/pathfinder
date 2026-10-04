@@ -18,19 +18,27 @@ export type SearchState = {
  * of the query starts again at 20, even back to an earlier one. When a tier lands,
  * `version` changes and the same query re-runs with the same row count, so the list only
  * grows.
+ *
+ * With `categoryId`, it searches that category and its sub-categories only, and an empty
+ * query lists all of their products (the category page).
  */
-export function useSearch(engine: SearchEngine | null, version: number): SearchState {
+export function useSearch(
+  engine: SearchEngine | null,
+  version: number,
+  categoryId?: number,
+): SearchState {
   const [query, setQuery] = useState('');
   const deferred = useDeferredValue(query);
-  const [stored, setStored] = useState<Rows>(() => firstRows(deferred));
-  const rows = rowsFor(stored, deferred);
-  // A new query forgets the old count right away, so going A → B → A starts A at 20 again.
+  const [stored, setStored] = useState<Rows>(() => firstRows(deferred, categoryId));
+  const rows = rowsFor(stored, deferred, categoryId);
+  // A new query or category forgets the old count right away, so going A → B → A starts A
+  // at 20 again.
   if (rows !== stored) setStored(rows);
   const { count } = rows;
 
   const response = useMemo(
-    () => runSearch(engine, deferred, count, version),
-    [engine, deferred, count, version],
+    () => runSearch(engine, deferred, count, version, categoryId),
+    [engine, deferred, count, version, categoryId],
   );
 
   return {
@@ -42,37 +50,42 @@ export function useSearch(engine: SearchEngine | null, version: number): SearchS
   };
 }
 
-/** How many rows the list shows, and for which query. */
-export type Rows = { query: string; count: number };
+/** How many rows the list shows, and for which query in which category. */
+export type Rows = { query: string; categoryId?: number; count: number };
 
-/** One page of rows for `query`. */
-export function firstRows(query: string): Rows {
-  return { query, count: PAGE_SIZE };
+/** One page of rows for `query` (inside `categoryId`, on a category page). */
+export function firstRows(query: string, categoryId?: number): Rows {
+  return { query, categoryId, count: PAGE_SIZE };
 }
 
-/** The same rows while the query is unchanged (same object, so nothing re-renders);
- * one page again as soon as it changes. */
-export function rowsFor(rows: Rows, query: string): Rows {
-  return rows.query === query ? rows : firstRows(query);
+/** The same rows while the query and category are unchanged (same object, so nothing
+ * re-renders); one page again as soon as either changes. */
+export function rowsFor(rows: Rows, query: string, categoryId?: number): Rows {
+  const same = rows.query === query && rows.categoryId === categoryId;
+  return same ? rows : firstRows(query, categoryId);
 }
 
 /** "Show more": one more page of the same query. */
 export function nextRows(rows: Rows): Rows {
-  return { query: rows.query, count: rows.count + PAGE_SIZE };
+  return { ...rows, count: rows.count + PAGE_SIZE };
 }
 
 /**
- * One search. `version` is unused by the engine call; it is an argument so the memo above
- * depends on it honestly and a new tier re-runs the query.
+ * One search, store-wide or inside `categoryId`. `version` is unused by the engine call;
+ * it is an argument so the memo above depends on it honestly and a new tier re-runs it.
  */
 export function runSearch(
   engine: SearchEngine | null,
   query: string,
   count: number,
   version: number,
+  categoryId?: number,
 ): SearchResponse | null {
   void version;
-  return engine ? engine.search(query, count) : null;
+  if (!engine) return null;
+  return categoryId === undefined
+    ? engine.search(query, count)
+    : engine.searchWithin(categoryId, query, count);
 }
 
 /** More rows exist now: the scan stopped at the row count, not at a tier still loading

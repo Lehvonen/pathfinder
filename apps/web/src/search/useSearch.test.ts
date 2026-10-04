@@ -39,6 +39,20 @@ describe('runSearch', () => {
   });
 });
 
+describe('runSearch inside a category', () => {
+  it('lists every product of the category for an empty query, unlike store-wide search', async () => {
+    const engine = await engineWith(milks(1, 3));
+    expect(runSearch(engine, '', 20, 1, 1)?.products).toHaveLength(3);
+    expect(runSearch(engine, '', 20, 1)?.products).toEqual([]);
+  });
+
+  it('searches only inside the category', async () => {
+    const engine = await engineWith(milks(1, 3));
+    expect(runSearch(engine, 'maito 1-2', 20, 1, 1)?.products.map((p) => p.ean)).toEqual(['1002']);
+    expect(runSearch(engine, 'maito', 20, 1, 99)?.products).toEqual([]);
+  });
+});
+
 describe('canShowMore', () => {
   const response = (overrides: Partial<SearchResponse>): SearchResponse => ({
     query: 'maito',
@@ -92,6 +106,12 @@ describe('row count', () => {
 
   it('starts again at one page when the query changes', () => {
     expect(rowsFor(nextRows(firstRows('maito')), 'maitox')).toEqual(firstRows('maitox'));
+  });
+
+  it('starts again at one page when the category changes, even with the same query', () => {
+    const fruit = nextRows(firstRows('', 9)); // a category page, 40 rows
+    expect(rowsFor(fruit, '', 9)).toBe(fruit);
+    expect(rowsFor(fruit, '', 10)).toEqual(firstRows('', 10));
   });
 
   it('starts at one page when going back to an earlier query (A → B → A)', () => {
