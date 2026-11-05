@@ -38,15 +38,8 @@ export function legFocus(route: Route, done: number): ViewBox {
   return boxes[Math.min(done, boxes.length - 1)]!;
 }
 
-/** How many things the route picks up: each item's amount, added up. */
-export function itemCount(route: Route): number {
-  return route.stops.reduce(
-    (sum, stop) => sum + stop.items.reduce((count, item) => count + item.quantity, 0),
-    0,
-  );
-}
-
-/** The shop's length, from "Aloita ostokset" to the end: "11 min", or "alle 1 min". */
+/** The shop's length, from "Aloita ostokset" to the end: "11 min", or "alle 1 min" under half a
+ * minute. */
 export function formatElapsed(milliseconds: number): string {
   const minutes = Math.round(milliseconds / 60_000);
   return minutes < 1 ? 'alle 1 min' : `${minutes} min`;

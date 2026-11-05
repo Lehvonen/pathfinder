@@ -1,6 +1,6 @@
 import type { ListItem, Route } from '@pathfinder/core';
 import { describe, expect, it } from 'vitest';
-import { distanceLeft, formatElapsed, itemCount, legFocus, stopsDone } from './progress';
+import { distanceLeft, formatElapsed, legFocus, stopsDone } from './progress';
 
 const item = (id: string, quantity = 1): ListItem => ({
   id,
@@ -101,9 +101,14 @@ describe('legFocus', () => {
   });
 });
 
-describe('itemCount', () => {
-  it('adds up every amount on the route', () => {
-    expect(itemCount(route)).toBe(4);
+describe('a route with no stops', () => {
+  // Every unticked item unplaced: the route is only the walk from the entrance to a checkout.
+  const empty: Route = { ...route, stops: [], totalDistance: 10 };
+
+  it('is done at once, with the walk to the checkout next', () => {
+    expect(stopsDone(empty, new Set())).toBe(0);
+    expect(distanceLeft(empty, 0)).toBe(10);
+    expect(legFocus(empty, 0)).toEqual({ x: 10, y: 0, width: 0, height: 10 });
   });
 });
 
@@ -112,5 +117,7 @@ describe('formatElapsed', () => {
     expect(formatElapsed(11 * 60_000)).toBe('11 min');
     expect(formatElapsed(90_000)).toBe('2 min');
     expect(formatElapsed(20_000)).toBe('alle 1 min');
+    expect(formatElapsed(29_999)).toBe('alle 1 min');
+    expect(formatElapsed(30_000)).toBe('1 min');
   });
 });
