@@ -4,18 +4,32 @@ type ShoppingListRowProps = {
   entry: ListEntry;
   onSetQuantity(id: string, quantity: number): void;
   onRemove(id: string): void;
+  /** Unticks a picked item, so "Laske reitti" routes it again. Without it, no button. */
+  onUntick?(id: string): void;
 };
 
 /**
  * One item on the shopping list: its name, a − / + stepper for the amount and a remove
- * button. − stops at 1 and + at MAX_QUANTITY; taking the item off is "Poista".
+ * button. − stops at 1 and + at MAX_QUANTITY; taking the item off is "Poista". An item
+ * ticked on the shopping screen is struck through, with "✓ Kerätty" to untick it: a ticked
+ * item is left out of the next route, so this is the way to get it back.
  */
-function ShoppingListRow({ entry, onSetQuantity, onRemove }: ShoppingListRowProps) {
+function ShoppingListRow({ entry, onSetQuantity, onRemove, onUntick }: ShoppingListRowProps) {
   const { item, name } = entry;
 
   return (
-    <li className="list-row">
+    <li className={item.checked ? 'list-row list-row--ticked' : 'list-row'}>
       <span className="list-row__name">{name}</span>
+      {item.checked && onUntick && (
+        <button
+          type="button"
+          className="list-row__untick"
+          aria-label={`Kerätty, palauta listalle: ${name}`}
+          onClick={() => onUntick(item.id)}
+        >
+          ✓ Kerätty
+        </button>
+      )}
       {/* Every row has the same three buttons; the name tells a screen reader which row. */}
       <span className="stepper" role="group" aria-label={`Määrä: ${name}`}>
         <button
