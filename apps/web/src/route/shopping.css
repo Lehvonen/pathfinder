@@ -1,0 +1,236 @@
+/* The shopping screen and the finish (docs/plans/route-map.md §5). The screen fills the
+   phone: a header, the map in about 70 %, and a sheet over the bottom 30 % that opens to
+   show the whole list. The sheet moves with `transform`, not `height`, so opening it never
+   lays the page out again: no lag. Tap targets are at least 44 px. */
+
+.shopping {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  grid-template-rows: auto 1fr 30vh;
+  grid-template-rows: auto 1fr 30svh;
+  max-width: 640px;
+  margin: 0 auto;
+  overflow: hidden;
+  background: #fff;
+}
+
+.shopping__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+}
+
+.shopping__header button {
+  min-height: 44px;
+  padding: 0 12px;
+}
+
+.shopping__progress {
+  margin: 0;
+  font-size: 15px;
+}
+
+.shopping__map {
+  min-height: 0;
+  padding: 0 8px;
+}
+
+/* ── The sheet: the current stop, or the whole list when open ─── */
+
+.shopping-sheet {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  height: 85vh;
+  height: 85svh;
+  padding: 0 16px calc(12px + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  background: #fff;
+  border-top: 2px solid #08060d;
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 -4px 12px rgb(0 0 0 / 12%);
+  /* Closed, only its top 30 % shows. */
+  transform: translateY(55vh);
+  transform: translateY(55svh);
+  transition: transform 0.2s ease-out;
+}
+
+.shopping-sheet--open {
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shopping-sheet {
+    transition: none;
+  }
+}
+
+.shopping-sheet__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 44px;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  border: 0;
+  background: none;
+}
+
+.shopping-sheet__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.shopping-sheet__stop {
+  margin: 4px 0;
+  font-size: 18px;
+}
+
+.shopping-sheet__stop--done {
+  color: #666;
+}
+
+.shopping-sheet__items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shopping-sheet__done {
+  margin: 8px 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.shopping-sheet__finish {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 8px;
+  font-weight: 600;
+  color: #fff;
+  background: #1b8a3c;
+  border-color: #1b8a3c;
+}
+
+/* ── One item with its tick ───────────────────────────────────── */
+
+.tick-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  font-size: 16px;
+}
+
+.tick-item__button {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  font-size: 22px;
+  line-height: 1;
+  border: 2px solid #08060d;
+  border-radius: 50%;
+}
+
+.tick-item__button[aria-pressed='true'] {
+  color: #fff;
+  background: #1b8a3c;
+  border-color: #1b8a3c;
+}
+
+.tick-item--ticked .tick-item__name {
+  color: #666;
+  text-decoration: line-through;
+}
+
+/* ── The finish: the card over the map, and the confetti ──────── */
+
+.finish {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  pointer-events: none;
+}
+
+.finish__card {
+  max-width: 320px;
+  padding: 20px;
+  text-align: center;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 6px 24px rgb(0 0 0 / 20%);
+  pointer-events: auto;
+  /* After the line has filled in. */
+  animation: finish-appear 0.3s ease-out 1.2s both;
+}
+
+.finish__card h2 {
+  margin: 0 0 8px;
+  font-size: 24px;
+}
+
+.finish__card p {
+  margin: 0 0 16px;
+}
+
+.finish__card button {
+  width: 100%;
+  min-height: 48px;
+  font-weight: 600;
+  color: #fff;
+  background: #08060d;
+}
+
+@keyframes finish-appear {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+
+.finish__confetti {
+  position: absolute;
+  top: -12px;
+  left: var(--x);
+  width: 8px;
+  height: 14px;
+  background: var(--colour);
+  border-radius: 2px;
+  animation: finish-fall 1.5s ease-in calc(1.2s + var(--delay)) both;
+}
+
+@keyframes finish-fall {
+  from {
+    opacity: 1;
+    transform: translateY(0) rotate(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(70vh) rotate(var(--spin));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .finish__card {
+    animation: none;
+  }
+
+  .finish__confetti {
+    display: none;
+  }
+}
