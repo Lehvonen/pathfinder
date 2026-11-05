@@ -1,6 +1,13 @@
 import type { ListItem } from '@pathfinder/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { clampQuantity, type ListEntry, listReducer, MAX_QUANTITY, newItemId } from './listState';
+import {
+  clampQuantity,
+  type ListEntry,
+  listReducer,
+  MAX_QUANTITY,
+  newItemId,
+  pickedCount,
+} from './listState';
 
 describe('newItemId', () => {
   afterEach(() => {
@@ -183,5 +190,15 @@ describe('listReducer: quantity and ticks', () => {
       { type: 'setQuantity', id: 'a', quantity: MAX_QUANTITY + 1 },
     );
     expect(capped[0]!.item.checked).toBe(true);
+  });
+});
+
+describe('pickedCount', () => {
+  it('adds up the amounts of ticked items only', () => {
+    let list = listOf({ ...milk, quantity: 3 }, bread, anyMilk);
+    expect(pickedCount(list)).toBe(0);
+    list = listReducer(list, { type: 'setChecked', id: 'a', checked: true });
+    list = listReducer(list, { type: 'setChecked', id: 'c', checked: true });
+    expect(pickedCount(list)).toBe(4);
   });
 });

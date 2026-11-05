@@ -95,3 +95,11 @@ export function listReducer(list: readonly ListEntry[], action: ListAction): Lis
       return [];
   }
 }
+
+/**
+ * How many things are ticked as picked: each ticked item's amount, added up. For the finish
+ * card, so it counts every item picked on the trip, also those from before a re-plan.
+ */
+export function pickedCount(list: readonly ListEntry[]): number {
+  return list.reduce((sum, entry) => sum + (entry.item.checked ? entry.item.quantity : 0), 0);
+}
