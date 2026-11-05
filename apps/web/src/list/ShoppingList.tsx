@@ -10,10 +10,10 @@ type ShoppingListProps = {
 };
 
 /**
- * The shopping list, a panel at the bottom of every page. Its heading, "Ostoslista (n)", is
- * the button that opens and closes the rows; it starts closed, so the search results get
- * the screen. "Laske reitti" shows either way, disabled while the list is empty, since
- * there is nothing to route.
+ * The shopping list, a panel at the bottom of the search screen and its category pages (the
+ * route screens replace it). Its heading, "Ostoslista (n)", is the button that opens and
+ * closes the rows; it starts closed, so the search results get the screen. "Laske reitti"
+ * shows either way, disabled while the list is empty, since there is nothing to route.
  */
 function ShoppingList({ list, onSetQuantity, onRemove, onCalculateRoute }: ShoppingListProps) {
   const [open, setOpen] = useState(false);
