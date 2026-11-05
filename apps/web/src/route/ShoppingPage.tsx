@@ -1,4 +1,4 @@
-import type { Route } from '@pathfinder/core';
+import type { ListItem, Route } from '@pathfinder/core';
 import { useId } from 'react';
 import StoreMap from '../map/StoreMap';
 import type { MapAreas } from './loadRoutingData';
@@ -17,6 +17,8 @@ type ShoppingPageProps = {
   onTick(id: string, ticked: boolean): void;
   onBack(): void;
   onFinish(): void;
+  /** Items the route could not place, shown in the open sheet. */
+  unplaced?: readonly ListItem[];
 };
 
 /**
@@ -26,7 +28,7 @@ type ShoppingPageProps = {
  * the next leg, walked legs stay deep green, those ahead light green.
  */
 function ShoppingPage(props: ShoppingPageProps) {
-  const { route, names, areas, ticked, onTick, onBack, onFinish } = props;
+  const { route, names, areas, ticked, onTick, onBack, onFinish, unplaced } = props;
   const titleId = useId();
   const title = useFocusOnMount<HTMLHeadingElement>();
   const done = stopsDone(route, ticked);
@@ -66,6 +68,7 @@ function ShoppingPage(props: ShoppingPageProps) {
         areas={areas}
         onTick={onTick}
         onFinish={onFinish}
+        unplaced={unplaced}
       />
     </section>
   );
