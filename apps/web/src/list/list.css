@@ -1,0 +1,81 @@
+/* Shopping list, below the search results. Phone first; tap targets are at least 44 px. */
+
+.shopping-list {
+  margin-top: 16px;
+  padding-top: 8px;
+  border-top: 2px solid #08060d;
+}
+
+.shopping-list__title {
+  margin: 0 0 4px;
+  font-size: 20px;
+}
+
+.shopping-list__empty {
+  margin: 8px 0;
+  font-size: 14px;
+  color: #666;
+}
+
+.shopping-list__rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The one action that matters once the list is done: full width, easy to hit. */
+.shopping-list__route {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: #08060d;
+}
+
+.shopping-list__route:disabled {
+  color: #666;
+  background: #eee;
+  border-color: #ccc;
+  cursor: default;
+}
+
+/* ── One row: name, amount stepper, remove ─────────────────── */
+
+.list-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 8px 0;
+  font-size: 15px;
+  border-bottom: 1px solid #eee;
+}
+
+.list-row__name {
+  flex: 1;
+  min-width: 0;
+}
+
+.list-row button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+  font-size: 14px;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+}
+
+.stepper button {
+  padding: 0;
+  font-size: 20px;
+}
+
+.stepper__value {
+  min-width: 2.5ch;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
