@@ -3,11 +3,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ListEntry } from '../list/listState';
 import type { LoadedRouting, MapAreas } from './loadRoutingData';
 import {
+  chosenRoute,
   formatDistance,
   formatMinutes,
   formatStops,
   itemName,
   MESSAGES,
+  nextEntrance,
   placeName,
   routeViewFor,
 } from './routeView';
@@ -21,13 +23,14 @@ const areas: MapAreas = {
   ],
 };
 
-// sisäänkäynti-1:0 ── j:0 ── maitokaappi:0
-//                      └──── kassat-1:0
+// sisäänkäynti-1:0 ─5─ j:0 ─5─ maitokaappi:0
+// sisäänkäynti-2:0 ─1─┘└─5─ kassat-1:0
 const routing: LoadedRouting = {
   data: toRoutingData(
     {
       version: 1,
       nodes: [
+        { id: 'sisäänkäynti-2:0', x: 1, y: 5, kind: 'entrance' },
         { id: 'sisäänkäynti-1:0', x: 0, y: 0, kind: 'entrance' },
         { id: 'j:0', x: 0, y: 5, kind: 'junction' },
         { id: 'maitokaappi:0', x: 5, y: 5, kind: 'shelf-access' },
@@ -35,6 +38,7 @@ const routing: LoadedRouting = {
       ],
       edges: [
         { from: 'sisäänkäynti-1:0', to: 'j:0', weight: 5 },
+        { from: 'sisäänkäynti-2:0', to: 'j:0', weight: 1 },
         { from: 'j:0', to: 'maitokaappi:0', weight: 5 },
         { from: 'j:0', to: 'kassat-1:0', weight: 5 },
       ],
@@ -74,33 +78,68 @@ describe('routeViewFor', () => {
       null,
     );
     if (view.kind !== 'route') throw new Error(`expected a route, got: ${view.text}`);
-    expect(view.result.route.stops.map((stop) => stop.nodeId)).toEqual(['maitokaappi:0']);
-    expect(view.result.route.totalDistance).toBe(20);
+    expect(chosenRoute(view, null).result.route.stops.map((stop) => stop.nodeId)).toEqual([
+      'maitokaappi:0',
+    ]);
+    expect(chosenRoute(view, null).result.route.totalDistance).toBe(20);
     expect(view.names.get('a')).toBe('Kevytmaito 1l');
     // A generic entry is named as the list shows it, with its category, not the bare word.
     expect(view.names.get('g')).toBe('"maito" (Maidot)');
     expect(view.areas).toBe(areas);
   });
 
+  it('plans from every entrance, entrance 1 first, so switching needs no new plan', () => {
+    const view = routeViewFor([product('a', '111', 'Maito')], routing, null);
+    if (view.kind !== 'route') throw new Error(`expected a route, got: ${view.text}`);
+    // Entrance 2 comes first in the graph, but entrance 1 is the default.
+    expect(view.entrances).toEqual(['sisäänkäynti-1:0', 'sisäänkäynti-2:0']);
+    // From entrance 2 the walk is shorter (1 + 5 + 5 + 5), yet entrance 1 is the default.
+    expect(chosenRoute(view, null).start).toBe('sisäänkäynti-1:0');
+    expect(chosenRoute(view, null).result.route.totalDistance).toBe(20);
+    expect(chosenRoute(view, 'sisäänkäynti-2:0').result.route.totalDistance).toBe(16);
+    expect(chosenRoute(view, 'sisäänkäynti-2:0').result.route.start.nodeId).toBe(
+      'sisäänkäynti-2:0',
+    );
+  });
+
+  it('falls back to the default for a start that is not an entrance', () => {
+    const view = routeViewFor([product('a', '111', 'Maito')], routing, null);
+    if (view.kind !== 'route') throw new Error(`expected a route, got: ${view.text}`);
+    expect(chosenRoute(view, 'maitokaappi:0').start).toBe('sisäänkäynti-1:0');
+  });
+
+  it('switches to the next entrance, going round', () => {
+    const view = routeViewFor([product('a', '111', 'Maito')], routing, null);
+    if (view.kind !== 'route') throw new Error(`expected a route, got: ${view.text}`);
+    expect(nextEntrance(view, 'sisäänkäynti-1:0')).toBe('sisäänkäynti-2:0');
+    expect(nextEntrance(view, 'sisäänkäynti-2:0')).toBe('sisäänkäynti-1:0');
+  });
+
   it('passes the items with no place on to the page', () => {
     const unknown = product('x', '999', 'Tuntematon');
     const view = routeViewFor([product('a', '111', 'Maito'), unknown], routing, null);
     if (view.kind !== 'route') throw new Error(`expected a route, got: ${view.text}`);
-    expect(view.result.unplaced).toEqual([unknown.item]);
+    expect(chosenRoute(view, null).result.unplaced).toEqual([unknown.item]);
     expect(view.names.get('x')).toBe('Tuntematon');
   });
 
   it('says the data is still loading', () => {
-    expect(routeViewFor([], null, null)).toEqual({ kind: 'message', text: MESSAGES.loading });
+    expect(routeViewFor([], null, null)).toEqual({
+      kind: 'message',
+      text: MESSAGES.loading,
+      canRetry: false,
+    });
   });
 
-  it('says the data failed to load, even if some arrived, and to press the button again', () => {
+  it('says the data failed to load, even if some arrived, and to try again', () => {
     expect(routeViewFor([], routing, new Error('HTTP 404'))).toEqual({
       kind: 'message',
       text: MESSAGES.loadFailed,
+      canRetry: true,
     });
-    // Never "reload the page": that would empty the list.
-    expect(MESSAGES.loadFailed).toContain('paina Laske reitti uudelleen');
+    // Never "reload the page": that would empty the list. The route screens have a retry button.
+    expect(MESSAGES.loadFailed).toContain('paina Yritä uudelleen');
+    expect(MESSAGES.loadFailed).not.toContain('lataa sivu');
   });
 
   it('turns a split map into a message instead of throwing', () => {
@@ -143,6 +182,7 @@ describe('routeViewFor', () => {
     expect(routeViewFor(list, splitRouting, null)).toEqual({
       kind: 'message',
       text: MESSAGES.mapError,
+      canRetry: false,
     });
     expect(console.error).toHaveBeenCalledWith(
       expect.objectContaining({ message: expect.stringContaining('map error') }),

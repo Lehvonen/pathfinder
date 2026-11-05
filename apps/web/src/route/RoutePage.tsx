@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef } from 'react';
 import RouteStopRow from './RouteStopRow';
 import {
+  chosenRoute,
   formatDistance,
   formatMinutes,
   formatStops,
@@ -53,7 +54,7 @@ function RoutePage({ view, onBack }: RoutePageProps) {
     );
   }
 
-  const { route, unplaced } = view.result;
+  const { route, unplaced } = chosenRoute(view, null).result;
   const { names, areas } = view;
   return (
     <section className="route-page" aria-labelledby={titleId}>
