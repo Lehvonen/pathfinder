@@ -75,3 +75,25 @@
   dominant-baseline: central;
   pointer-events: none;
 }
+
+/* ── The finish: each leg drawn in, one after another (StoreMap's `filling`) ── */
+
+.store-map--filling .store-map__leg {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: store-map-fill 0.12s linear forwards;
+  animation-delay: calc(var(--leg) * 0.12s);
+}
+
+@keyframes store-map-fill {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .store-map--filling .store-map__leg {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}
