@@ -32,6 +32,8 @@ type StoreMapProps = {
 const NODE_RADIUS_PX = 10;
 const NUMBER_PX = 12;
 const LABEL_PX = 11;
+/** The route line's width; map.css sets it in pixels, except while filling (below). */
+const LEG_PX = 6;
 
 /**
  * The store map with the route on it: the areas as grey shapes, their names once zoomed in
@@ -69,7 +71,11 @@ function StoreMap({ areas, route, current, focus, label, filling = false }: Stor
   const states = legStates(legs.length, current);
 
   return (
-    <div ref={box} className={filling ? 'store-map store-map--filling' : 'store-map'}>
+    <div
+      ref={box}
+      className={filling ? 'store-map store-map--filling' : 'store-map'}
+      style={filling ? ({ '--legs': legs.length } as CSSProperties) : undefined}
+    >
       <svg
         viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`}
         role="img"
@@ -109,8 +115,13 @@ function StoreMap({ areas, route, current, focus, label, filling = false }: Stor
               key={index}
               className={`store-map__leg store-map__leg--${states[index]}`}
               d={pathData(legs[index]!)}
-              // Filling: each leg is drawn as one unit of length, in its turn (map.css).
-              {...(filling && { pathLength: 1, style: { '--leg': index } as CSSProperties })}
+              // Filling: each leg is one unit long and drawn in its turn (map.css), its width in
+              // metres, since a fixed screen width would turn the dashes into a dashed line.
+              {...(filling && {
+                pathLength: 1,
+                // Inline, so it beats map.css's width in pixels.
+                style: { '--leg': index, strokeWidth: metres(LEG_PX) } as CSSProperties,
+              })}
             />
           ))}
         </g>
