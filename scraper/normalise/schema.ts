@@ -73,6 +73,72 @@ export const categoryNamesSchema = z.record(z.string(), z.string().min(1));
 /** data/normalised/category-ids.json, the append-only registry read back on every run. */
 export const categoryIdsSchema = z.record(z.string(), id);
 
+// ── Map source files (data/graph/) ───────────────────────────
+
+/** A point in metres, origin at the floorplan's top-left, y down (types.ts, walk graph). */
+const point = z.tuple([z.number().nonnegative(), z.number().nonnegative()]);
+
+/** Lowercase kebab-case. å, ä and ö are letters of their own and are kept, never replaced. */
+const kebabId = z.string().regex(/^[a-z0-9åäö]+(-[a-z0-9åäö]+)*$/, 'not kebab-case');
+
+/**
+ * data/graph/areas.json: the labelled areas of the store's own map, traced from `source`
+ * and scaled by `metresPerSourceUnit`. `label` is the text printed on the map; an area
+ * printed without one has none. `entrances` are where the map's arrows lead into the
+ * store, where every route starts. Shelf polygons and the walk graph are built over these.
+ */
+export const mapAreasSchema = z.strictObject({
+  version: z.literal(1),
+  source: z.url(),
+  metresPerSourceUnit: z.number().positive(),
+  entrances: z.array(z.strictObject({ id: kebabId, point })).min(1),
+  areas: z.array(
+    z.strictObject({
+      id: kebabId,
+      label: z.string().min(1).optional(),
+      kind: z.enum(['goods', 'checkout', 'other']),
+      polygon: z.array(point).min(3),
+    }),
+  ),
+});
+
+export type MapAreas = z.infer<typeof mapAreasSchema>;
+
+/** Twice the signed area of a polygon (shoelace). Zero means its points are in a line. */
+function doubledArea(polygon: [number, number][]): number {
+  let sum = 0;
+  polygon.forEach(([x1, y1], i) => {
+    const [x2, y2] = polygon[(i + 1) % polygon.length]!;
+    sum += x1 * y2 - x2 * y1;
+  });
+  return sum;
+}
+
+/**
+ * Every problem in data/graph/areas.json, one line each. Empty means it is valid. Areas and
+ * entrances share one id space, so a walk-graph node named after either is unambiguous.
+ */
+export function validateMapAreas(data: unknown): string[] {
+  const result = mapAreasSchema.safeParse(data);
+  if (!result.success) {
+    return result.error.issues.map(
+      (issue) => `areas: ${issue.path.join('.') || '(file)'} ${issue.message}`,
+    );
+  }
+  const errors: string[] = [];
+  const ids = new Set<string>();
+  const claim = (kind: string, id: string) => {
+    if (ids.has(id)) errors.push(`${kind} ${id}: duplicate id`);
+    ids.add(id);
+  };
+  for (const entrance of result.data.entrances) claim('entrance', entrance.id);
+  for (const area of result.data.areas) {
+    claim('area', area.id);
+    if (doubledArea(area.polygon) === 0) errors.push(`area ${area.id}: polygon has no area`);
+  }
+  return errors;
+}
+
 // ── Output validation ────────────────────────────────────────
 
 /** Names a record by its key field, or by its position when it has none. */

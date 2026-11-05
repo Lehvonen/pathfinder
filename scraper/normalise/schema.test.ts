@@ -1,4 +1,5 @@
 import type { Category, Placement, Product } from '@pathfinder/core';
+import { readFileSync } from 'node:fs';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import type { z } from 'zod';
 import type { CuratedDepartment } from './departments';
@@ -11,6 +12,7 @@ import {
   placementSchema,
   popularitySchema,
   productSchema,
+  validateMapAreas,
   validateNormalised,
   type NormalisedData,
 } from './schema';
@@ -51,6 +53,99 @@ describe('curation schemas', () => {
     expect(categoryNamesSchema.safeParse({ a: '' }).success).toBe(false);
     expect(categoryIdsSchema.safeParse({ a: 1, 'a/b': 2 }).success).toBe(true);
     expect(categoryIdsSchema.safeParse({ a: 0 }).success).toBe(false);
+  });
+});
+
+describe('validateMapAreas', () => {
+  const square = {
+    id: 'kukat',
+    label: 'Kukat',
+    kind: 'goods',
+    polygon: [
+      [0, 0],
+      [4, 0],
+      [4, 4],
+      [0, 4],
+    ],
+  };
+  const door = { id: 'sisäänkäynti-1', point: [10, 2] };
+  const file = (areas: unknown[], entrances: unknown[] = [door]) => ({
+    version: 1,
+    source: 'https://example.com/map.svg',
+    metresPerSourceUnit: 0.22,
+    entrances,
+    areas,
+  });
+
+  it('accepts valid areas, labelled or not, with å, ä and ö kept in the id', () => {
+    const unlabelled = { id: 'nimetön', kind: 'goods', polygon: square.polygon };
+    const lettersKept = { ...square, id: 'keittiö-åland' };
+    expect(validateMapAreas(file([square, unlabelled, lettersKept]))).toEqual([]);
+  });
+
+  it.each([
+    ['an id that is not kebab-case', { ...square, id: 'Kukat' }],
+    ['an id with a letter other than å, ä or ö outside a-z', { ...square, id: 'café' }],
+    ['an unknown kind', { ...square, kind: 'shop' }],
+    [
+      'a negative coordinate',
+      {
+        ...square,
+        polygon: [
+          [-1, 0],
+          [4, 0],
+          [4, 4],
+        ],
+      },
+    ],
+    [
+      'fewer than three points',
+      {
+        ...square,
+        polygon: [
+          [0, 0],
+          [4, 4],
+        ],
+      },
+    ],
+    ['an unknown field', { ...square, colour: 'black' }],
+  ])('rejects an area with %s', (_, bad) => {
+    expect(validateMapAreas(file([bad]))).not.toEqual([]);
+  });
+
+  it.each([
+    ['no entrances', []],
+    ['an entrance at a negative coordinate', [{ ...door, point: [-1, 2] }]],
+    ['an entrance with an id that is not kebab-case', [{ ...door, id: 'Ovi 1' }]],
+  ])('rejects a map with %s', (_, entrances) => {
+    expect(validateMapAreas(file([square], entrances))).not.toEqual([]);
+  });
+
+  it('rejects an entrance with the same id as an area', () => {
+    expect(validateMapAreas(file([square], [{ ...door, id: 'kukat' }]))).toEqual([
+      'area kukat: duplicate id',
+    ]);
+  });
+
+  it('rejects a duplicate id and a polygon with no area', () => {
+    const flat = {
+      ...square,
+      id: 'viiva',
+      polygon: [
+        [0, 0],
+        [2, 2],
+        [4, 4],
+      ],
+    };
+    expect(validateMapAreas(file([square, square, flat]))).toEqual([
+      'area kukat: duplicate id',
+      'area viiva: polygon has no area',
+    ]);
+  });
+
+  it('accepts the committed data/graph/areas.json', () => {
+    const path = new URL('../../data/graph/areas.json', import.meta.url);
+    expect(validateMapAreas(JSON.parse(readFileSync(path, 'utf8')))).toEqual([]);
   });
 });
 

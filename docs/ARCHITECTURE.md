@@ -741,7 +741,7 @@ Monday. This outranks every checkbox below.
 - [ ] Editor: click to place nodes, drag to connect, assign shelf IDs, export JSON — **rough version by end of week 2**, polish never
 - [ ] Editor autosave to `localStorage` on every change, plus undo _(ready when: editor renders — do this before any bulk tracing session)_
 - [ ] Editor exports **one section at a time** to `data/graph/`, merged at build time; several people map in parallel without conflicts
-- [ ] Coordinate system fixed; floorplan traced schematically
+- [x] Coordinate system fixed; floorplan traced schematically — department-level areas from the store's own map, `data/graph/areas.json`, placeholder scale (`docs/plans/map.md`)
 - [ ] Shelf polygons drawn, by section
 - [ ] Nodes placed: aisle ends, junctions, entrance, checkouts, shelf access points
 - [ ] Extra attention to connectivity at department boundaries and the checkout area
