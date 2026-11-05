@@ -104,3 +104,46 @@
   font-size: 15px;
   list-style: none;
 }
+
+/* ── Route overview: summary, map, then what to do ───────────── */
+
+.route-overview__map {
+  height: 55vh;
+  height: 55dvh;
+}
+
+.route-overview__start {
+  margin: 8px 0;
+  font-size: 15px;
+}
+
+.route-overview__actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.route-overview__actions button {
+  min-height: 48px;
+}
+
+/* The one to press: dark and full width, like "Laske reitti" was. */
+.route-overview__primary {
+  font-weight: 600;
+  color: #fff;
+  background: #08060d;
+}
+
+/* ── Edit list ──────────────────────────────────────────────── */
+
+.list-edit__rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.list-edit__add {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 12px;
+}
