@@ -693,7 +693,9 @@ zoomed to the leg to the next stop, and a sheet with that stop's items, each wit
 once all are ticked the route moves on (unticking steps back), and the sheet opens to the
 whole list. After the last stop, "Lopeta ostokset" shows the finish: the route drawn in,
 the trip in numbers, green confetti, and "Valmis" back to search with an empty list.
-Pinch and pan come next. Plan: `docs/plans/route-map.md`.
+Every store map can be pinched, panned and wheel-zoomed, with no React render during the
+gesture, and glides to the next leg; the sheet can be dragged by its heading. Plan:
+`docs/plans/route-map.md`.
 
 ### Offline
 
@@ -860,7 +862,7 @@ Monday. This outranks every checkbox below.
 - [ ] List builder, the rest: reorder, check off; Zustand + `localStorage`
 - [ ] SVG map: shelf polygons, route legs, numbered pins _(rough version at department level: area shapes, the route in green, numbered nodes; shelf polygons wait for the detailed map)_
 - [ ] Three path states; animated current leg _(three states done, rough: walked and next deep green, ahead light green; not animated)_
-- [ ] Auto-zoom to current leg, full-route toggle _(auto-zoom done on the shopping screen; the overview shows the full route)_
+- [ ] Auto-zoom to current leg, full-route toggle _(auto-zoom with a glide on the shopping screen; the overview shows the full route; pinch and pan anywhere)_
 - [x] Check-off advances the map _(ticks on the shopping screen; a stop is done when all its items are ticked)_
 - [x] Trip summary: stops, distance, time _(on the route overview; minutes rough, at 1 m/s plus 20 s per stop)_
 - [ ] Route-mode toggle (TSP / serpentine)

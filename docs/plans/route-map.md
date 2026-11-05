@@ -1,7 +1,7 @@
 # Plan: the route map and shopping screens
 
-**Status:** PR A (overview, edit list, map) merged (#29). PR B (shopping, finish) built. PR C
-(gestures) next. **A rough draft, not a source of truth**: a prototype to be polished later. Where this
+**Status:** PR A (overview, edit list, map) merged (#29), PR B (shopping, finish) merged
+(#30), PR C (gestures) built. **A rough draft, not a source of truth**: a prototype to be polished later. Where this
 file and the code disagree, the code wins.
 **Architecture refs:** §9 (routing), §11 (list builder, map view, trip summary), §14
 (performance targets)
@@ -66,11 +66,19 @@ for that.
   object for the same route (`routeFocus`).
 - **The overview map is `55svh` tall**, not `dvh`: it keeps its size while a phone's
   address bar shows and hides, so nothing jumps or redraws while scrolling.
-- **(C) Gestures change the view directly, outside React**, once per screen refresh; no
-  gesture library.
+- **Gestures change the view directly, outside React** (`usePanZoom`): each frame sets the
+  SVG's `viewBox`, at most once per screen refresh, and React redraws only once, when the
+  gesture ends, so node and name sizes fit the new zoom. No gesture library. The maths
+  (`panZoom.ts`: pan, pinch around the fingers, wheel zoom around the mouse, the limits) is
+  tested.
+- **Limits:** no closer than 12 m across, no further out than 1.5 times the store, and the
+  view's centre kept inside the store.
+- **The glide:** a new focus (the next leg) glides there in 0.25 s from whatever is on screen,
+  a pan or zoom included; at once with reduced motion. The view the shopper chose holds until
+  the focus changes.
 - **No extra download:** the map uses `graph.json` and `areas.json`, already loaded.
 
-## 5. Shopping (PR B, built) and gestures (PR C, planned)
+## 5. Shopping (PR B) and gestures (PR C)
 
 - **"Aloita ostokset"** on the overview fixes the route as it is then (with the chosen
   entrance) and opens the shopping screen: "← Takaisin" and "Pysähdys 2/12: Maitokaappi ·
@@ -84,12 +92,14 @@ for that.
   heading (or "Kaikki kerätty"), since the ticked button has just left the screen; with it
   open, focus stays on the button.
 - **The sheet:** about 30 % with the current stop's items; its heading opens it over 85 %
-  with every stop and any items with no place, scrollable (a tap now; dragging in C). It
+  with every stop and any items with no place, scrollable. Its heading opens and closes it with a tap, or
+  drags it (`useSheetDrag`): the sheet follows the finger with no React render, then settles
+  at the nearer end, or the way it was flicked (`sheetDrag.ts`, tested). It
   moves with `transform`, so opening it never lays the page out again. Closed, its body fits
   the visible 30 % and scrolls, so a stop with many items never runs off the screen. No
   pull-to-refresh while shopping: a reload would lose the list.
 - **Zoom:** fits the leg to the next stop automatically on every move (`legFocus`, cached so
-  a tick that doesn't move the route on doesn't redraw the map); pinch and pan (C).
+  a tick that doesn't move the route on doesn't redraw the map), gliding there; pinch and pan to look around.
 - **Finish:** once every stop is done the sheet says "Kaikki kerätty – kassalle!" with
   "Lopeta ostokset". The finish screen draws the whole route's legs in, one after another,
   over 1.2 s whatever the route's length (widths in metres while filling: with fixed screen
@@ -110,8 +120,6 @@ for that.
   the route planned then. The items and the time cover the whole shop.
 - **A shop given up is still timed from its start:** going back to search mid-shop and later
   starting again (without "Valmis") times the finish from the first start.
-- **The zoom jumps** to the next leg rather than gliding there; a short animation fits with
-  the gestures (C).
 - **The shopping screen's wiring in `App.tsx`** (fixing the route, the finish, "Valmis") has
   no tests: the web app has no component or hook tests yet. The logic it uses
   (`progress.ts`) is tested.
