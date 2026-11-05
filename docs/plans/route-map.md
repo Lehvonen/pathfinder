@@ -1,7 +1,7 @@
 # Plan: the route map and shopping screens
 
-**Status:** PR A (overview, edit list, map) built. PR B (shopping, finish) and PR C (gestures)
-next. **A rough draft, not a source of truth**: a prototype to be polished later. Where this
+**Status:** PR A (overview, edit list, map) merged (#29). PR B (shopping, finish) built. PR C
+(gestures) next. **A rough draft, not a source of truth**: a prototype to be polished later. Where this
 file and the code disagree, the code wins.
 **Architecture refs:** §9 (routing), §11 (list builder, map view, trip summary), §14
 (performance targets)
@@ -70,23 +70,35 @@ for that.
   gesture library.
 - **No extra download:** the map uses `graph.json` and `areas.json`, already loaded.
 
-## 5. Shopping (PR B) and gestures (PR C), planned
+## 5. Shopping (PR B, built) and gestures (PR C, planned)
 
-- **Ticks:** each item has a tick; the route moves to the next stop **when every item at the
-  current stop is ticked**, and unticking steps back. The list's `checked` field holds the
-  ticks (`setChecked`, PR A).
-- **The sheet:** about 30 % with the current stop's items; dragged up (C; a tap in B) it shows
-  the whole list, scrollable.
-- **Zoom:** fits the next leg automatically on every move; pinch and pan (C) to look around.
-- **Finish:** the line fills in deep green, a card "Valmis! 14 tuotetta · 322 m · aikaa
-  kului 11 min" (time from "Aloita ostokset"), a short green confetti burst (none with
-  reduced motion), and "Valmis" back to search with an empty list (`clear`, PR A).
+- **"Aloita ostokset"** on the overview fixes the route as it is then (with the chosen
+  entrance) and opens the shopping screen: "← Takaisin" and "Pysähdys 2/12: Maitokaappi ·
+  180 m jäljellä" at the top, the map in about 70 %, the sheet in the bottom 30 %.
+- **Ticks:** each item has a round tick; the route moves to the next stop **when every item
+  at the current stop is ticked**, and unticking steps back (`stopsDone` in `progress.ts`).
+  The list's `checked` field holds the ticks, so going back to search keeps them, and
+  "Laske reitti" then routes only what is left. The list panel and "Muokkaa listaa" show a
+  ticked item struck through, with "✓ Kerätty" to untick it and route it again.
+- **Focus:** when a stop is done with the sheet closed, focus moves to the next stop's
+  heading (or "Kaikki kerätty"), since the ticked button has just left the screen; with it
+  open, focus stays on the button.
+- **The sheet:** about 30 % with the current stop's items; its heading opens it over 85 %
+  with every stop and any items with no place, scrollable (a tap now; dragging in C). It
+  moves with `transform`, so opening it never lays the page out again. Closed, its body fits
+  the visible 30 % and scrolls, so a stop with many items never runs off the screen. No
+  pull-to-refresh while shopping: a reload would lose the list.
+- **Zoom:** fits the leg to the next stop automatically on every move (`legFocus`, cached so
+  a tick that doesn't move the route on doesn't redraw the map); pinch and pan (C).
+- **Finish:** once every stop is done the sheet says "Kaikki kerätty – kassalle!" with
+  "Lopeta ostokset". The finish screen draws the whole route's legs in, one after another,
+  over 1.2 s whatever the route's length (widths in metres while filling: with fixed screen
+  widths the dashes come out as a dashed line); then a card "Valmis! 14 tuotetta · 322 m ·
+  aikaa kului 11 min" (every ticked item; the time from the first "Aloita ostokset") and 30 pieces of green confetti, all CSS (none with reduced motion). "Valmis"
+  goes back to search with an empty list (`clear`).
 
 ## 6. Known gaps
 
-- **`RoutePage.tsx` and `RouteStopRow.tsx` are unused** after PR A: removing `RoutePage`
-  in the same PR would change it twice. PR B removes it, and reuses `RouteStopRow` or
-  removes it.
 - **No start or checkout marker** on the map yet: the line simply starts and ends there.
 - **Names show only zoomed in**, so the overview of a whole store on a phone has none
   (about 3.4 px/m). Above 7 px/m, 4 pairs on the real map still touch (e.g. "Kala" and
@@ -94,3 +106,12 @@ for that.
   the cut length when zooming arrives (B, C).
 - **The list is kept in memory only**: a reload mid-shop loses it. Saving it comes later.
 - **Recalculating mid-shop starts from the entrance**, not from where the shopper is.
+- **The finish card's metres are the last plan's:** after a re-plan mid-shop it counts only
+  the route planned then. The items and the time cover the whole shop.
+- **A shop given up is still timed from its start:** going back to search mid-shop and later
+  starting again (without "Valmis") times the finish from the first start.
+- **The zoom jumps** to the next leg rather than gliding there; a short animation fits with
+  the gestures (C).
+- **The shopping screen's wiring in `App.tsx`** (fixing the route, the finish, "Valmis") has
+  no tests: the web app has no component or hook tests yet. The logic it uses
+  (`progress.ts`) is tested.

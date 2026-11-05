@@ -1,11 +1,14 @@
-import type { Category, ListItem } from '@pathfinder/core';
+import type { Category, ListItem, Route } from '@pathfinder/core';
 import type { ProductHit } from '@pathfinder/search';
 import { useDeferredValue, useMemo, useReducer, useState } from 'react';
 import ShoppingList from './list/ShoppingList';
-import { listReducer, newItemId, type ListEntry } from './list/listState';
+import { listReducer, newItemId, pickedCount, type ListEntry } from './list/listState';
+import FinishScreen from './route/FinishScreen';
 import ListEditPage from './route/ListEditPage';
+import type { MapAreas } from './route/loadRoutingData';
 import RouteOverview from './route/RouteOverview';
-import { routeViewFor, shownRouteView } from './route/routeView';
+import { chosenRoute, routeViewFor, shownRouteView } from './route/routeView';
+import ShoppingPage from './route/ShoppingPage';
 import { useRoutingData } from './route/useRoutingData';
 import CategoryPage from './search/CategoryPage';
 import SearchBar from './search/SearchBar';
@@ -16,9 +19,22 @@ import './search/search.css';
 import './list/list.css';
 import './route/route.css';
 import './map/map.css';
+import './route/shopping.css';
 
 /** Which screen is showing; search includes its category pages. */
-type Screen = 'search' | 'route' | 'edit';
+type Screen = 'search' | 'route' | 'edit' | 'shopping' | 'finish';
+
+/** The shop under way: the route fixed when "Aloita ostokset" was pressed, and when. */
+type Trip = {
+  route: Route;
+  /** Items the route could not place, still shown in the open sheet. */
+  unplaced: readonly ListItem[];
+  names: ReadonlyMap<string, string>;
+  areas: MapAreas;
+  /** The first "Aloita ostokset": a re-plan mid-shop keeps it, so the time is the whole shop. */
+  startedAt: number;
+  finishedAt: number | null;
+};
 
 function App() {
   const { engine, version, error } = useSearchEngine();
@@ -46,6 +62,15 @@ function App() {
     () => plannedList && routeViewFor(plannedList, routing, routingError),
     [plannedList, routing, routingError],
   );
+  const shownView = shownRouteView(routeView, plannedList, routedList);
+  const [trip, setTrip] = useState<Trip | null>(null);
+  // The ticks are the list's own (`checked`): the shopping screen ticks and unticks them, and
+  // the list panel and edit screen show them with "✓ Kerätty" to untick. A ticked item is
+  // left out of the next route, so that is how it gets back on.
+  const ticked = useMemo(
+    () => new Set(list.filter((entry) => entry.item.checked).map((entry) => entry.item.id)),
+    [list],
+  );
 
   /** Plans the route for the list as it is now and shows it. */
   const showRoute = () => {
@@ -65,6 +90,35 @@ function App() {
   const setQuantity = (id: string, quantity: number) =>
     dispatch({ type: 'setQuantity', id, quantity });
   const remove = (id: string) => dispatch({ type: 'remove', id });
+  const untick = (id: string) => dispatch({ type: 'setChecked', id, checked: false });
+
+  /** Fixes the route on the overview and starts the shop; only offered once there is one. */
+  const startShopping =
+    shownView.kind === 'route'
+      ? () => {
+          const { route, unplaced } = chosenRoute(shownView, start).result;
+          setTrip((current) => ({
+            route,
+            unplaced,
+            names: shownView.names,
+            areas: shownView.areas,
+            startedAt: current?.startedAt ?? Date.now(),
+            finishedAt: null,
+          }));
+          showScreen('shopping');
+        }
+      : undefined;
+  const finishShopping = () => {
+    setTrip((current) => current && { ...current, finishedAt: Date.now() });
+    showScreen('finish');
+  };
+  /** "Valmis": the shop is over, so the list starts empty again. */
+  const closeTrip = () => {
+    dispatch({ type: 'clear' });
+    setRoutedList(null);
+    setTrip(null);
+    showScreen('search');
+  };
 
   const add = (item: ListItem, name: string) => {
     dispatch({ type: 'add', item, name });
@@ -90,20 +144,41 @@ function App() {
 
   return (
     <main>
-      {screen === 'route' ? (
+      {screen === 'shopping' && trip !== null ? (
+        <ShoppingPage
+          route={trip.route}
+          names={trip.names}
+          areas={trip.areas}
+          ticked={ticked}
+          onTick={(id, checked) => dispatch({ type: 'setChecked', id, checked })}
+          onBack={() => showScreen('search')}
+          onFinish={finishShopping}
+          unplaced={trip.unplaced}
+        />
+      ) : screen === 'finish' && trip !== null ? (
+        <FinishScreen
+          route={trip.route}
+          areas={trip.areas}
+          elapsedMs={(trip.finishedAt ?? trip.startedAt) - trip.startedAt}
+          picked={pickedCount(list)}
+          onDone={closeTrip}
+        />
+      ) : screen === 'route' ? (
         <RouteOverview
-          view={shownRouteView(routeView, plannedList, routedList)}
+          view={shownView}
           start={start}
           onChangeStart={setStart}
           onEditList={() => showScreen('edit')}
           onBack={() => showScreen('search')}
           onRetry={retryRouting}
+          onStartShopping={startShopping}
         />
       ) : screen === 'edit' ? (
         <ListEditPage
           list={list}
           onSetQuantity={setQuantity}
           onRemove={remove}
+          onUntick={untick}
           onAddMore={() => showScreen('search')}
           onBack={backFromEdit}
         />
@@ -142,6 +217,7 @@ function App() {
             list={list}
             onSetQuantity={setQuantity}
             onRemove={remove}
+            onUntick={untick}
             onCalculateRoute={showRoute}
           />
         </>

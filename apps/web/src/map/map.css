@@ -50,21 +50,21 @@
    see-through: see-through legs that share an aisle would add up to a darker green. */
 .store-map__leg--walked,
 .store-map__leg--next {
-  stroke: #1b8a3c;
+  stroke: var(--route-deep);
 }
 
 .store-map__leg--ahead {
-  stroke: #a9d3b5;
+  stroke: var(--route-light);
 }
 
 /* A stop: a circle a little wider than the line, so the line bulges there, with its number. */
 .store-map__node--walked,
 .store-map__node--next {
-  fill: #1b8a3c;
+  fill: var(--route-deep);
 }
 
 .store-map__node--ahead {
-  fill: #a9d3b5;
+  fill: var(--route-light);
 }
 
 .store-map__number {
@@ -74,4 +74,35 @@
   text-anchor: middle;
   dominant-baseline: central;
   pointer-events: none;
+}
+
+/* ── The finish: each leg drawn in, one after another (StoreMap's `filling`) ──
+   Each leg is one unit long (pathLength=1), drawn in over an equal share of
+   --fill-time. Its width is set in metres while filling, and non-scaling-stroke is off:
+   with it on, browsers measure the dashes in screen pixels but the length in metres, and
+   the line comes out dashed. */
+
+.store-map--filling {
+  --fill-time: 1.2s;
+}
+
+.store-map--filling .store-map__leg {
+  vector-effect: none;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: store-map-fill calc(var(--fill-time) / var(--legs)) linear forwards;
+  animation-delay: calc(var(--leg) * var(--fill-time) / var(--legs));
+}
+
+@keyframes store-map-fill {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .store-map--filling .store-map__leg {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
 }

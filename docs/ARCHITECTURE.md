@@ -642,15 +642,15 @@ Add, remove, reorder, check off. Saved and recurring lists in `localStorage`.
 
 **Current state — a rough first version** (`apps/web/src/list/`). The list is a panel
 fixed to the bottom of the search screen and its category pages; the route screens replace
-it. Its heading,
-"Ostoslista (n)", opens and closes it; it starts closed, so the results get the screen, and
+it. Its heading, "Ostoslista (n)", opens and closes it; it starts closed, so the results get the screen, and
 open it scrolls within half the screen. Items can be added, removed, and given an amount
 from 1 to 99 with a − / + stepper; adding something already on the list raises its amount
 instead of adding a second row. A "Laske reitti" button shows whether the list is open or
 closed, disabled while it is empty, and opens the route overview ("Route overview" below).
 The state is a plain `useReducer` in `App.tsx`, kept in memory only, so a reload empties
-the list. Items can be ticked and unticked (`setChecked`; any rise in amount unticks), for
-the shopping screen to come. Reorder, Zustand and `localStorage` are still to come; Zustand
+the list. Items are ticked on the shopping screen (`setChecked`; any rise in amount unticks); the
+panel and "Muokkaa listaa" show a ticked item struck through, with "✓ Kerätty" to untick it,
+since a ticked item is left out of the next route. Reorder, Zustand and `localStorage` are still to come; Zustand
 when the map needs the list too.
 
 ### Route mode
@@ -688,8 +688,12 @@ with numbered nodes), "Aloita: Sisäänkäynti 1", then **"Muokkaa listaa"** (am
 "+ Lisää tuotteita") and **"Vaihda aloituspaikka"**, instant since both entrances are
 planned. **Entrance 1 is the default.** The list panel only shows on search. Data still
 loading, data that failed to load (with "Yritä uudelleen") and a map error each show a
-message instead. The shopping screen, ticks and gestures come next. Plan:
-`docs/plans/route-map.md`.
+message instead. **"Aloita ostokset"** opens the **shopping screen**: the map in about 70 %
+zoomed to the leg to the next stop, and a sheet with that stop's items, each with a tick;
+once all are ticked the route moves on (unticking steps back), and the sheet opens to the
+whole list. After the last stop, "Lopeta ostokset" shows the finish: the route drawn in,
+the trip in numbers, green confetti, and "Valmis" back to search with an empty list.
+Pinch and pan come next. Plan: `docs/plans/route-map.md`.
 
 ### Offline
 
@@ -855,9 +859,9 @@ Monday. This outranks every checkbox below.
 - [x] Route overview, rough version: summary, the route on the store map, start at entrance 1 or switch, edit list, messages for loading and map errors (§11, `docs/plans/route-map.md`)
 - [ ] List builder, the rest: reorder, check off; Zustand + `localStorage`
 - [ ] SVG map: shelf polygons, route legs, numbered pins _(rough version at department level: area shapes, the route in green, numbered nodes; shelf polygons wait for the detailed map)_
-- [ ] Three path states; animated current leg
-- [ ] Auto-zoom to current leg, full-route toggle
-- [ ] Check-off advances the map
+- [ ] Three path states; animated current leg _(three states done, rough: walked and next deep green, ahead light green; not animated)_
+- [ ] Auto-zoom to current leg, full-route toggle _(auto-zoom done on the shopping screen; the overview shows the full route)_
+- [x] Check-off advances the map _(ticks on the shopping screen; a stop is done when all its items are ticked)_
 - [x] Trip summary: stops, distance, time _(on the route overview; minutes rough, at 1 m/s plus 20 s per stop)_
 - [ ] Route-mode toggle (TSP / serpentine)
 - [ ] URL-encoded list sharing

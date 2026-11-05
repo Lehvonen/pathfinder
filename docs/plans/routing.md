@@ -102,8 +102,9 @@ only, the split-map error and two-checkout tests; these docs.
 
 **Built** in `apps/web/src/route/`: `loadRoutingData.ts` (fetch, index), `routeView.ts`
 (the route or a message; place names, distances, minutes), `useRoutingData.ts` (loads once
-enabled, retries on request), `RouteStopRow.tsx`, `RoutePage.tsx` (focuses its heading on
-opening), `route.css`; `App.tsx` connects the button. Place names come from the node id's area in `areas.json`; an area with no label
+enabled, retries on request), `route.css`; `App.tsx` connects the button. The route page
+(`RoutePage.tsx`, `RouteStopRow.tsx`) has since been replaced by the route overview and the
+shopping screen (`docs/plans/route-map.md`). Place names come from the node id's area in `areas.json`; an area with no label
 and an entrance are named from the id ("Sisäänkäynti 1").
 
 ## 5. Decisions, for now

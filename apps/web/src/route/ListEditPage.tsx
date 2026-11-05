@@ -7,6 +7,8 @@ type ListEditPageProps = {
   list: readonly ListEntry[];
   onSetQuantity(id: string, quantity: number): void;
   onRemove(id: string): void;
+  /** Unticks an item picked on the shopping screen (see ShoppingListRow). */
+  onUntick?(id: string): void;
   /** Back to search, to add more; the list is kept. */
   onAddMore(): void;
   /** Back to the route, planned again for the list as it is now. */
@@ -18,7 +20,8 @@ type ListEditPageProps = {
  * − / + amount and "Poista", and "+ Lisää tuotteita" back to search. "← Takaisin reittiin"
  * plans the route again, so removed items drop out of it.
  */
-function ListEditPage({ list, onSetQuantity, onRemove, onAddMore, onBack }: ListEditPageProps) {
+function ListEditPage(props: ListEditPageProps) {
+  const { list, onSetQuantity, onRemove, onUntick, onAddMore, onBack } = props;
   const titleId = useId();
   const title = useFocusOnMount<HTMLHeadingElement>();
 
@@ -42,6 +45,7 @@ function ListEditPage({ list, onSetQuantity, onRemove, onAddMore, onBack }: List
               entry={entry}
               onSetQuantity={onSetQuantity}
               onRemove={onRemove}
+              onUntick={onUntick}
             />
           ))}
         </ul>

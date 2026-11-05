@@ -1,5 +1,5 @@
 import type { Route } from '@pathfinder/core';
-import { memo, useLayoutEffect, useRef, useState } from 'react';
+import { memo, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import type { MapAreas } from '../route/loadRoutingData';
 import {
   drawOrder,
@@ -20,16 +20,20 @@ type StoreMapProps = {
   /** How many stops are done; decides which leg is next (`legStates`). */
   current: number;
   /** The part of the store to fit on screen, in metres. Keep it the same object between
-   *  renders (`useMemo`), or the map redraws each time. */
+   *  renders (a cached one, like `routeFocus`), or the map redraws each time. */
   focus: ViewBox;
   /** What the map shows, for a screen reader: the SVG itself says nothing. */
   label: string;
+  /** Draws each leg in, one after another, from the start to the checkout: the finish. */
+  filling?: boolean;
 };
 
 /** Sizes on screen, in pixels, whatever the zoom. */
 const NODE_RADIUS_PX = 10;
 const NUMBER_PX = 12;
 const LABEL_PX = 11;
+/** The route line's width; map.css sets it in pixels, except while filling (below). */
+const LEG_PX = 6;
 
 /**
  * The store map with the route on it: the areas as grey shapes, their names once zoomed in
@@ -37,7 +41,7 @@ const LABEL_PX = 11;
  * stop. It fills its container and fits `focus` into it. It measures itself first and draws
  * nothing until then; after that it redraws only when its size or its props change (`memo`).
  */
-function StoreMap({ areas, route, current, focus, label }: StoreMapProps) {
+function StoreMap({ areas, route, current, focus, label, filling = false }: StoreMapProps) {
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState<ScreenSize | null>(null);
 
@@ -67,7 +71,11 @@ function StoreMap({ areas, route, current, focus, label }: StoreMapProps) {
   const states = legStates(legs.length, current);
 
   return (
-    <div ref={box} className="store-map">
+    <div
+      ref={box}
+      className={filling ? 'store-map store-map--filling' : 'store-map'}
+      style={filling ? ({ '--legs': legs.length } as CSSProperties) : undefined}
+    >
       <svg
         viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`}
         role="img"
@@ -107,6 +115,13 @@ function StoreMap({ areas, route, current, focus, label }: StoreMapProps) {
               key={index}
               className={`store-map__leg store-map__leg--${states[index]}`}
               d={pathData(legs[index]!)}
+              // Filling: each leg is one unit long and drawn in its turn (map.css), its width in
+              // metres, since a fixed screen width would turn the dashes into a dashed line.
+              {...(filling && {
+                pathLength: 1,
+                // Inline, so it beats map.css's width in pixels.
+                style: { '--leg': index, strokeWidth: metres(LEG_PX) } as CSSProperties,
+              })}
             />
           ))}
         </g>

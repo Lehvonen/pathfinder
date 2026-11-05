@@ -99,6 +99,17 @@ body:has(.shopping-list) {
   min-width: 0;
 }
 
+/* Picked on the shopping screen: struck through, and left out of the next route. */
+.list-row--ticked .list-row__name {
+  color: #666;
+  text-decoration: line-through;
+}
+
+.list-row__untick {
+  color: var(--route-deep);
+  border-color: var(--route-deep);
+}
+
 .list-row button {
   min-width: 44px;
   min-height: 44px;

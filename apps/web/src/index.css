@@ -5,6 +5,9 @@
     Roboto,
     sans-serif;
   color: #08060d;
+  /* The route's two greens: walked and next, and what is still ahead (map, ticks, finish). */
+  --route-deep: #1b8a3c;
+  --route-light: #a9d3b5;
 }
 
 body {
