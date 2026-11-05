@@ -676,13 +676,16 @@ Stop count, estimated distance, estimated time.
 
 ### Route page — current state, a rough first version
 
-`apps/web/src/route/`. The routing data loads in the background when the app opens.
-"Laske reitti" plans the route for the list as it is then and shows it in place of search:
+`apps/web/src/route/`. The routing data (about 230 KB gzipped) loads in the background once
+search is ready, so it never slows the first search (§14); if it fails, pressing "Laske
+reitti" again loads it again, since a reload would empty the list. "Laske reitti" plans the
+route for the list as it is then and shows it in place of search, with focus on its heading:
 the trip summary ("12 pysähdystä · 322 m · noin 9 min"), the entrance, the numbered stops
 in walking order, each with its area name from the store map, the walk from the previous
 stop and its items with amounts, then the checkout, and any items with no place. Data
-still loading, data that failed to load and a map error each show a message instead.
-Editing the list afterwards does not change the route; pressing the button again does.
+still loading, data that failed to load and a map error each show a message instead; the
+loading message turns into the route by itself when the data lands. Editing the list
+afterwards does not change the route; pressing the button again does.
 **No map yet**: the map view above is the next step. Plan: `docs/plans/routing.md` §4.
 
 ### Offline
