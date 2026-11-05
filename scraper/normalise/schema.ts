@@ -22,6 +22,7 @@ export const temperatureSchema = z.enum(['ambient', 'chilled', 'frozen']);
 
 const ean = z.string().refine(isValidEan, 'not an EAN');
 const id = z.number().int().positive();
+const shelfId = z.string().regex(/^[^:]+:[^:]+$/, 'not <departmentId>:<shelf>');
 
 export const productSchema = z.strictObject({
   ean,
@@ -32,7 +33,7 @@ export const productSchema = z.strictObject({
 
 export const placementSchema = z.strictObject({
   ean,
-  shelfId: z.string().regex(/^[^:]+:[^:]+$/, 'not <departmentId>:<shelf>'),
+  shelfId,
   shelfLevel: z.number().int().positive().optional(),
   isPrimary: z.boolean(),
 });
@@ -72,6 +73,242 @@ export const categoryNamesSchema = z.record(z.string(), z.string().min(1));
 
 /** data/normalised/category-ids.json, the append-only registry read back on every run. */
 export const categoryIdsSchema = z.record(z.string(), id);
+
+// ── Map source files (data/graph/) ───────────────────────────
+
+/** A point in metres, origin at the floorplan's top-left, y down (types.ts, walk graph). */
+const point = z.tuple([z.number().nonnegative(), z.number().nonnegative()]);
+
+/** Lowercase kebab-case. å, ä and ö are letters of their own and are kept, never replaced. */
+const kebabId = z.string().regex(/^[a-z0-9åäö]+(-[a-z0-9åäö]+)*$/, 'not kebab-case');
+
+/**
+ * data/graph/areas.json: the labelled areas of the store's own map, traced from `source`
+ * and scaled by `metresPerSourceUnit`. `label` is the text printed on the map; an area
+ * printed without one has none. `entrances` are where the map's arrows lead into the
+ * store, where every route starts. Shelf polygons and the walk graph are built over these.
+ */
+export const mapAreasSchema = z.strictObject({
+  version: z.literal(1),
+  source: z.url(),
+  metresPerSourceUnit: z.number().positive(),
+  entrances: z.array(z.strictObject({ id: kebabId, point })).min(1),
+  areas: z.array(
+    z.strictObject({
+      id: kebabId,
+      label: z.string().min(1).optional(),
+      kind: z.enum(['goods', 'checkout', 'other']),
+      polygon: z.array(point).min(3),
+    }),
+  ),
+});
+
+export type MapAreas = z.infer<typeof mapAreasSchema>;
+
+/** Twice the signed area of a polygon (shoelace). Zero means its points are in a line. */
+function doubledArea(polygon: [number, number][]): number {
+  let sum = 0;
+  polygon.forEach(([x1, y1], i) => {
+    const [x2, y2] = polygon[(i + 1) % polygon.length]!;
+    sum += x1 * y2 - x2 * y1;
+  });
+  return sum;
+}
+
+/**
+ * Every problem in data/graph/areas.json, one line each. Empty means it is valid. Areas and
+ * entrances share one id space, so a walk-graph node named after either is unambiguous.
+ */
+export function validateMapAreas(data: unknown): string[] {
+  const result = mapAreasSchema.safeParse(data);
+  if (!result.success) return issueLines('areas', result.error);
+  const errors: string[] = [];
+  const ids = new Set<string>();
+  const claim = (kind: string, id: string) => {
+    if (ids.has(id)) errors.push(`${kind} ${id}: duplicate id`);
+    ids.add(id);
+  };
+  for (const entrance of result.data.entrances) claim('entrance', entrance.id);
+  for (const area of result.data.areas) {
+    claim('area', area.id);
+    if (doubledArea(area.polygon) === 0) errors.push(`area ${area.id}: polygon has no area`);
+  }
+  return errors;
+}
+
+/** One line per schema problem in a whole file, prefixed with the file's short name. */
+function issueLines(file: string, error: z.ZodError): string[] {
+  return error.issues.map(
+    (issue) => `${file}: ${issue.path.join('.') || '(file)'} ${issue.message}`,
+  );
+}
+
+/**
+ * data/curation/department-areas.json: which map area each department is in. `name` is
+ * K-Ruoka's department name, for whoever reviews the row. `reviewed: false` marks a row
+ * placed by judgement rather than by a map label; delete it once the row is checked in the
+ * store (docs/plans/map.md).
+ */
+export const departmentAreasSchema = z.array(
+  z.strictObject({
+    department: z.string().min(1),
+    area: kebabId,
+    name: z.string(),
+    reviewed: z.literal(false).optional(),
+  }),
+);
+
+/** A department as data/normalised/departments.json lists it, as far as this check needs. */
+export interface DepartmentSeen {
+  id: string;
+  name: string;
+  products: number;
+}
+
+/**
+ * Every problem in the department → area table, one line each. Empty means it is valid.
+ * Every department with products needs a row: without one its products cannot be routed,
+ * so a missing row is an error, never silently skipped (ARCHITECTURE.md §13, Track B).
+ */
+export function validateDepartmentAreas(
+  rows: unknown,
+  departments: DepartmentSeen[],
+  areaIds: ReadonlySet<string>,
+): string[] {
+  const result = departmentAreasSchema.safeParse(rows);
+  if (!result.success) return issueLines('department-areas', result.error);
+  const errors: string[] = [];
+  const known = new Set(departments.map((department) => department.id));
+  const mapped = new Set<string>();
+  for (const row of result.data) {
+    const prefix = `department ${row.department}:`;
+    if (mapped.has(row.department)) errors.push(`${prefix} duplicate row`);
+    mapped.add(row.department);
+    if (!known.has(row.department)) errors.push(`${prefix} no such department`);
+    if (!areaIds.has(row.area)) errors.push(`${prefix} no such area ${row.area}`);
+  }
+  for (const department of departments) {
+    if (department.products > 0 && !mapped.has(department.id)) {
+      errors.push(
+        `department ${department.id} (${department.name}): no area for its ${department.products} products`,
+      );
+    }
+  }
+  return errors;
+}
+
+// ── Walk graph (data/graph/department-level.json) ────────────
+
+export const graphNodeSchema = z.strictObject({
+  id: z.string().min(1),
+  x: z.number().nonnegative(),
+  y: z.number().nonnegative(),
+  kind: z.enum(['shelf-access', 'junction', 'aisle-end', 'entrance', 'checkout']),
+  aisle: z.number().int().positive().optional(),
+});
+
+export const edgeSchema = z.strictObject({
+  from: z.string().min(1),
+  to: z.string().min(1),
+  weight: z.number().positive(),
+});
+
+export const shelfSchema = z.strictObject({
+  id: shelfId,
+  accessNodeId: z.string().min(1),
+  polygon: z.array(point).min(3),
+});
+
+export const graphSchema = z.strictObject({
+  version: z.literal(1),
+  nodes: z.array(graphNodeSchema),
+  edges: z.array(edgeSchema),
+  shelves: z.array(shelfSchema),
+});
+
+/** A graph source file: the contract's `Graph`, plus a note on how far to trust it. */
+export const graphSourceSchema = graphSchema.extend({ note: z.string().min(1) });
+
+/** The nodes reachable from `start`, walking edges both ways (types.ts, `Edge`). */
+function reachable(start: string, edges: { from: string; to: string }[]): Set<string> {
+  const next = new Map<string, string[]>();
+  for (const { from, to } of edges) {
+    next.set(from, [...(next.get(from) ?? []), to]);
+    next.set(to, [...(next.get(to) ?? []), from]);
+  }
+  const seen = new Set([start]);
+  const queue = [start];
+  for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
+    for (const neighbour of next.get(id) ?? []) {
+      if (!seen.has(neighbour)) {
+        seen.add(neighbour);
+        queue.push(neighbour);
+      }
+    }
+  }
+  return seen;
+}
+
+/**
+ * Every problem in a walk-graph source file, one line each. Empty means it is valid.
+ * Besides the references, every node must be reachable from an entrance, and every
+ * department with products needs its department-wide shelf `<id>:00`, so that each of
+ * its products can be routed (docs/plans/map.md §5).
+ */
+export function validateGraph(data: unknown, departments: DepartmentSeen[]): string[] {
+  const result = graphSourceSchema.safeParse(data);
+  if (!result.success) return issueLines('graph', result.error);
+  const { nodes, edges, shelves } = result.data;
+  const errors: string[] = [];
+
+  const nodeIds = new Set<string>();
+  for (const node of nodes) {
+    if (nodeIds.has(node.id)) errors.push(`node ${node.id}: duplicate id`);
+    nodeIds.add(node.id);
+  }
+  const pairs = new Set<string>();
+  for (const { from, to } of edges) {
+    const prefix = `edge ${from} → ${to}:`;
+    for (const end of [from, to]) {
+      if (!nodeIds.has(end)) errors.push(`${prefix} no such node ${end}`);
+    }
+    if (from === to) errors.push(`${prefix} joins a node to itself`);
+    const pair = [from, to].sort().join('\n');
+    if (pairs.has(pair)) errors.push(`${prefix} duplicate edge`);
+    pairs.add(pair);
+  }
+  const shelfIds = new Set<string>();
+  for (const shelf of shelves) {
+    if (shelfIds.has(shelf.id)) errors.push(`shelf ${shelf.id}: duplicate id`);
+    shelfIds.add(shelf.id);
+    if (!nodeIds.has(shelf.accessNodeId)) {
+      errors.push(`shelf ${shelf.id}: no such node ${shelf.accessNodeId}`);
+    }
+  }
+
+  for (const kind of ['entrance', 'checkout'] as const) {
+    if (!nodes.some((node) => node.kind === kind)) errors.push(`graph: no ${kind} node`);
+  }
+  const entrance = nodes.find((node) => node.kind === 'entrance');
+  if (entrance) {
+    const seen = reachable(entrance.id, edges);
+    const stranded = nodes.filter((node) => !seen.has(node.id)).map((node) => node.id);
+    if (stranded.length > 0) {
+      errors.push(
+        `graph: ${stranded.length} nodes unreachable from ${entrance.id}: ${stranded.join(', ')}`,
+      );
+    }
+  }
+
+  for (const department of departments) {
+    if (department.products > 0 && !shelfIds.has(`${department.id}:00`)) {
+      errors.push(
+        `department ${department.id} (${department.name}): no shelf ${department.id}:00 for its ${department.products} products`,
+      );
+    }
+  }
+  return errors;
+}
 
 // ── Output validation ────────────────────────────────────────
 

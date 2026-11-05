@@ -7,7 +7,10 @@
 | The shopping app                          | `apps/web/src/`                  |
 | The map editor (internal tool)            | `apps/map-editor/src/`           |
 | Scraper (TypeScript, run with Bun)        | `scraper/`                       |
-| Data build / validation scripts           | `scripts/`                       |
+| Data build scripts                        | `scripts/`                       |
+| Data validation (schemas and checks)      | `scraper/normalise/schema.ts`    |
+| The store map: areas, walk graph          | `data/graph/`                    |
+| Hand-maintained data (department tables)  | `data/curation/`                 |
 | Hand-made fixtures                        | `data/mock/`                     |
 | Implementation plans, one per feature     | `docs/plans/`                    |
 
@@ -102,3 +105,21 @@ bun run scraper/export-kupittaa.ts collect   # list every product: EAN, name, br
 bun run scraper/export-kupittaa.ts scrape    # fetch each product's location (~18 h, resumable)
 bun run scraper/export-kupittaa.ts status    # progress counts, no network
 ```
+
+## Store map
+
+The store map is a **rough department-level draft**, traced from K-Citymarket's own map of Kupittaa. It is good enough to route every product, but it is **not a source of truth**: the aisles, the scale and some department placements are guesses until the store visit checks them. Where it came from, what is guessed and what to check: [`docs/plans/map.md`](docs/plans/map.md).
+
+| File                                  | What it holds                                                                         |
+| ------------------------------------- | ------------------------------------------------------------------------------------- |
+| `data/graph/areas.json`               | The map's labelled areas and the two entrances, in metres                             |
+| `data/curation/department-areas.json` | Which area each department is in; `reviewed: false` marks a row to check in the store |
+| `data/graph/department-level.json`    | The walk graph: aisles, one access node per area, one shelf per department            |
+
+All three are checked by the scraper's tests, so a broken edit fails `pnpm test`. To check only them:
+
+```bash
+pnpm --filter @pathfinder/scraper exec vitest run normalise/schema.test.ts
+```
+
+Ids are lowercase kebab-case made from the Finnish names, with å, ä and ö kept as they are: `keittiö`, `sisäänkäynti-1`.
