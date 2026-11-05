@@ -48,6 +48,30 @@ function bruteForceLength(costs: TourCosts): number {
 const isOrderOf = (order: number[], count: number) =>
   [...order].sort((a, b) => a - b).join() === Array.from({ length: count }, (_, i) => i).join();
 
+/**
+ * Stops on a line, checkout to the right: going to the nearest stop first (0, on the right)
+ * means crossing back over the start to 1 and 2. The shortest is 2, 1, 0.
+ */
+const NEAREST_FIRST_IS_WRONG = costsFor(
+  [0, 0],
+  [
+    [1, 0],
+    [-2, 0],
+    [-4, 0],
+  ],
+  [[3, 0]],
+);
+
+/** Stop 1 can't be reached from stop 0 or back: a map split in two. */
+const NOT_CONNECTED: TourCosts = {
+  fromStart: [1, 1],
+  between: [
+    [0, Infinity],
+    [Infinity, 0],
+  ],
+  toEnd: [1, 1],
+};
+
 describe('tourLength', () => {
   it('adds start → stops → end', () => {
     const costs = costsFor(
@@ -73,17 +97,11 @@ describe('heldKarp', () => {
   });
 
   it('beats going to the nearest stop first, when that is wrong', () => {
-    // Nearest first goes right to 0, then must cross back over the start to 1 and 2.
-    const costs = costsFor(
-      [0, 0],
-      [
-        [1, 0],
-        [-2, 0],
-        [-4, 0],
-      ],
-      [[3, 0]],
-    );
-    expect(heldKarp(costs)).toEqual([2, 1, 0]);
+    expect(heldKarp(NEAREST_FIRST_IS_WRONG)).toEqual([2, 1, 0]);
+  });
+
+  it('throws rather than leave out a stop it cannot reach', () => {
+    expect(() => heldKarp(NOT_CONNECTED)).toThrow('not connected');
   });
 
   it('picks the last stop by the checkout nearest to it', () => {
@@ -144,30 +162,29 @@ describe('nearestNeighbourTwoOpt', () => {
   });
 
   it('undoes a crossing that nearest-neighbour makes', () => {
-    const costs = costsFor(
-      [0, 0],
-      [
-        [1, 0],
-        [-2, 0],
-        [-4, 0],
-      ],
-      [[3, 0]],
-    );
-    expect(nearestNeighbourTwoOpt(costs)).toEqual([2, 1, 0]);
+    expect(nearestNeighbourTwoOpt(NEAREST_FIRST_IS_WRONG)).toEqual([2, 1, 0]);
+  });
+
+  it('throws rather than return a walk it cannot make', () => {
+    expect(() => nearestNeighbourTwoOpt(NOT_CONNECTED)).toThrow('not connected');
   });
 });
 
 describe('bestOrder', () => {
-  it('is exact up to the Held-Karp limit', () => {
-    const points = randomPoints(HELD_KARP_MAX_STOPS, 11);
-    const costs = costsFor([0, 50], points, [[100, 50]]);
-    expect(bestOrder(costs)).toEqual(heldKarp(costs));
+  it('is exact at the Held-Karp limit, where nearest-neighbour + 2-opt is not', () => {
+    // Seed 2: nearest-neighbour + 2-opt is 11 % longer than the shortest at 15 stops, so this
+    // fails if the limit moves below 15.
+    const costs = costsFor([0, 50], randomPoints(HELD_KARP_MAX_STOPS, 2), [[100, 50]]);
+    const exact = tourLength(costs, heldKarp(costs));
+    expect(tourLength(costs, bestOrder(costs))).toBeCloseTo(exact, 9);
+    expect(tourLength(costs, nearestNeighbourTwoOpt(costs))).toBeGreaterThan(exact * 1.05);
   });
 
-  it('still gives a full order above it', () => {
-    const points = randomPoints(HELD_KARP_MAX_STOPS + 5, 11);
-    const costs = costsFor([0, 50], points, [[100, 50]]);
-    expect(bestOrder(costs)).toEqual(nearestNeighbourTwoOpt(costs));
-    expect(isOrderOf(bestOrder(costs), HELD_KARP_MAX_STOPS + 5)).toBe(true);
+  it('switches to nearest-neighbour + 2-opt one stop above it', () => {
+    const count = HELD_KARP_MAX_STOPS + 1;
+    const costs = costsFor([0, 50], randomPoints(count, 2), [[100, 50]]);
+    const order = bestOrder(costs);
+    expect(order).toEqual(nearestNeighbourTwoOpt(costs));
+    expect(isOrderOf(order, count)).toBe(true);
   });
 });

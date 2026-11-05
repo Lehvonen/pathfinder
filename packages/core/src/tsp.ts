@@ -15,6 +15,11 @@ export type TourCosts = {
 /** Up to this many stops the exact order is found; above it, a near-shortest one. */
 export const HELD_KARP_MAX_STOPS = 15;
 
+/** Thrown when some stop can't be reached from another: a map error, not a list error. */
+function notConnected(where: string): Error {
+  return new Error(`${where}: no walk visits every stop; some stops are not connected`);
+}
+
 /** Start → the stops in `order` → the end. 0 for no stops. */
 export function tourLength(costs: TourCosts, order: readonly number[]): number {
   if (order.length === 0) return 0;
@@ -60,6 +65,9 @@ export function heldKarp(costs: TourCosts): number[] {
   for (let i = 1; i < n; i++) {
     if (best[all * n + i]! + costs.toEnd[i]! < best[all * n + last]! + costs.toEnd[last]!) last = i;
   }
+  // No finite walk through every stop: some distance is missing or infinite. Never return
+  // an order that leaves stops out.
+  if (!Number.isFinite(best[all * n + last]! + costs.toEnd[last]!)) throw notConnected('heldKarp');
   const order: number[] = [];
   for (let set = all; last !== -1;) {
     order.push(last);
@@ -73,7 +81,9 @@ export function heldKarp(costs: TourCosts): number[] {
 /**
  * Nearest-neighbour, then 2-opt: from the start always go to the nearest unvisited stop,
  * then keep reversing any stretch of the order that makes the whole walk shorter, until
- * none does. Usually within a few percent of the shortest; for lists too long for Held-Karp.
+ * none does. For lists too long for Held-Karp. Not always close: on the real map at 15
+ * stops it is 4 % longer than the shortest on average, 12 % for one list in ten, and up to
+ * about 30 % (docs/plans/routing.md §3).
  */
 export function nearestNeighbourTwoOpt(costs: TourCosts): number[] {
   const n = costs.fromStart.length;
@@ -91,6 +101,7 @@ export function nearestNeighbourTwoOpt(costs: TourCosts): number[] {
   }
 
   let length = tourLength(costs, order);
+  if (!Number.isFinite(length)) throw notConnected('nearestNeighbourTwoOpt');
   for (let improved = true; improved;) {
     improved = false;
     for (let i = 0; i < n - 1; i++) {
