@@ -1,6 +1,7 @@
-import { useEffect, useId, useRef } from 'react';
+import { useId } from 'react';
 import type { ListEntry } from '../list/listState';
 import ShoppingListRow from '../list/ShoppingListRow';
+import { useFocusOnMount } from './useFocusOnMount';
 
 type ListEditPageProps = {
   list: readonly ListEntry[];
@@ -19,11 +20,7 @@ type ListEditPageProps = {
  */
 function ListEditPage({ list, onSetQuantity, onRemove, onAddMore, onBack }: ListEditPageProps) {
   const titleId = useId();
-  const title = useRef<HTMLHeadingElement>(null);
-
-  useEffect(() => {
-    title.current?.focus();
-  }, []);
+  const title = useFocusOnMount<HTMLHeadingElement>();
 
   return (
     <section className="route-page" aria-labelledby={titleId}>
@@ -38,7 +35,7 @@ function ListEditPage({ list, onSetQuantity, onRemove, onAddMore, onBack }: List
       {list.length === 0 ? (
         <p className="route-page__message">Lista on tyhjä.</p>
       ) : (
-        <ul className="list-edit__rows">
+        <ul className="shopping-list__rows">
           {list.map((entry) => (
             <ShoppingListRow
               key={entry.item.id}
