@@ -3,6 +3,11 @@
    show the whole list. The sheet moves with `transform`, not `height`, so opening it never
    lays the page out again: no lag. Tap targets are at least 44 px. */
 
+/* No pull-to-refresh while shopping: the list lives in memory only, so a reload loses it. */
+body:has(.shopping) {
+  overscroll-behavior-y: none;
+}
+
 .shopping {
   position: fixed;
   inset: 0;
@@ -25,6 +30,7 @@
 
 .shopping__header button {
   min-height: 44px;
+  white-space: nowrap;
   padding: 0 12px;
 }
 
@@ -89,6 +95,14 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Closed, the body fits the 30 % that shows (less the heading and the bottom padding), so a
+   stop with many items scrolls instead of running off the bottom of the screen. */
+.shopping-sheet:not(.shopping-sheet--open) .shopping-sheet__body {
+  max-height: calc(30vh - 56px - env(safe-area-inset-bottom));
+  max-height: calc(30svh - 56px - env(safe-area-inset-bottom));
 }
 
 .shopping-sheet__stop {
@@ -118,8 +132,8 @@
   margin-top: 8px;
   font-weight: 600;
   color: #fff;
-  background: #1b8a3c;
-  border-color: #1b8a3c;
+  background: var(--route-deep);
+  border-color: var(--route-deep);
 }
 
 /* ── One item with its tick ───────────────────────────────────── */
@@ -147,8 +161,8 @@
 
 .tick-item__button[aria-pressed='true'] {
   color: #fff;
-  background: #1b8a3c;
-  border-color: #1b8a3c;
+  background: var(--route-deep);
+  border-color: var(--route-deep);
 }
 
 .tick-item--ticked .tick-item__name {
@@ -175,8 +189,8 @@
   border-radius: 12px;
   box-shadow: 0 6px 24px rgb(0 0 0 / 20%);
   pointer-events: auto;
-  /* After the line has filled in. */
-  animation: finish-appear 0.3s ease-out 1.2s both;
+  /* After the line has filled in (map.css --fill-time, 1.2 s). */
+  animation: finish-appear 0.3s ease-out 1.3s both;
 }
 
 .finish__card h2 {
@@ -203,6 +217,18 @@
   }
 }
 
+/* Only the button is hidden until the card shows, so a stray tap can't press an invisible
+   "Valmis". The heading stays focusable: a hidden element can't take focus. */
+.finish__card button {
+  animation: finish-reveal 0s 1.3s both;
+}
+
+@keyframes finish-reveal {
+  from {
+    visibility: hidden;
+  }
+}
+
 .finish__confetti {
   position: absolute;
   top: -12px;
@@ -211,7 +237,7 @@
   height: 14px;
   background: var(--colour);
   border-radius: 2px;
-  animation: finish-fall 1.5s ease-in calc(1.2s + var(--delay)) both;
+  animation: finish-fall 1.5s ease-in calc(1.3s + var(--delay)) both;
 }
 
 @keyframes finish-fall {
@@ -226,7 +252,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .finish__card {
+  .finish__card,
+  .finish__card button {
     animation: none;
   }
 
