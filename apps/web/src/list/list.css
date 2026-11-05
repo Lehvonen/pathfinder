@@ -1,14 +1,54 @@
-/* Shopping list, below the search results. Phone first; tap targets are at least 44 px. */
+/* Shopping list: a panel fixed to the bottom of the screen, on every page. Closed it shows
+   the heading and "Laske reitti"; open, the rows too. Phone first; tap targets 44 px+. */
 
-.shopping-list {
-  margin-top: 16px;
-  padding-top: 8px;
-  border-top: 2px solid #08060d;
+/* Room under the page, so the last search result never hides behind the closed panel. */
+body {
+  padding-bottom: 160px;
 }
 
+.shopping-list {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 4px 16px calc(12px + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  background: #fff;
+  border-top: 2px solid #08060d;
+  box-shadow: 0 -4px 12px rgb(0 0 0 / 12%);
+}
+
+/* The heading is the open / close button: the whole row is the tap target. */
 .shopping-list__title {
-  margin: 0 0 4px;
+  margin: 0;
   font-size: 20px;
+}
+
+.shopping-list__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  border: 0;
+  background: none;
+}
+
+.shopping-list__arrow {
+  font-size: 14px;
+}
+
+/* Open: the rows scroll inside the panel, so it never covers the whole screen. */
+.shopping-list__body {
+  max-height: 50vh;
+  overflow-y: auto;
 }
 
 .shopping-list__empty {
@@ -27,7 +67,7 @@
 .shopping-list__route {
   width: 100%;
   min-height: 48px;
-  margin-top: 12px;
+  margin-top: 8px;
   font-weight: 600;
   color: #fff;
   background: #08060d;
