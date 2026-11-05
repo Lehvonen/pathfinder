@@ -71,15 +71,14 @@ function App() {
       <p className="search-note" aria-live="polite">
         {lastAdded && `Lisätty listalle: ${lastAdded}`}
       </p>
-      {!browsing && (
-        <ShoppingList
-          list={list}
-          onSetQuantity={(id, quantity) => dispatch({ type: 'setQuantity', id, quantity })}
-          onRemove={(id) => dispatch({ type: 'remove', id })}
-          // Routing is not built yet; the button is there so the flow can be tried.
-          onCalculateRoute={() => {}}
-        />
-      )}
+      {/* On every page, and always mounted, so it stays open or closed across pages. */}
+      <ShoppingList
+        list={list}
+        onSetQuantity={(id, quantity) => dispatch({ type: 'setQuantity', id, quantity })}
+        onRemove={(id) => dispatch({ type: 'remove', id })}
+        // Routing is not built yet; the button is there so the flow can be tried.
+        onCalculateRoute={() => {}}
+      />
     </main>
   );
 }
