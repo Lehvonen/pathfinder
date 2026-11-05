@@ -10,7 +10,9 @@ export type ListEntry = { item: ListItem; name: string };
 export type ListAction =
   | { type: 'add'; item: ListItem; name: string }
   | { type: 'remove'; id: string }
-  | { type: 'setQuantity'; id: string; quantity: number };
+  | { type: 'setQuantity'; id: string; quantity: number }
+  | { type: 'setChecked'; id: string; checked: boolean }
+  | { type: 'clear' };
 
 /** The most of one item a list holds; the stepper stops here. */
 export const MAX_QUANTITY = 99;
@@ -50,8 +52,10 @@ function withQuantity(entry: ListEntry, quantity: number): ListEntry {
 
 /**
  * The list's state changes, for `useReducer`. Adding something already on the list adds
- * to its quantity instead of a second row. Quantity never drops below 1: taking an item
- * off the list is `remove`.
+ * to its quantity instead of a second row, and unticks it: more of it is still to be
+ * picked. Quantity never drops below 1: taking an item off the list is `remove`.
+ * `setChecked` ticks an item as picked up in the store, or unticks it; `clear` empties the
+ * list when the shop is done.
  */
 export function listReducer(list: readonly ListEntry[], action: ListAction): ListEntry[] {
   switch (action.type) {
@@ -63,9 +67,11 @@ export function listReducer(list: readonly ListEntry[], action: ListAction): Lis
           withQuantity({ item: action.item, name: action.name }, action.item.quantity),
         ];
       }
-      return list.map((entry, i) =>
-        i === index ? withQuantity(entry, entry.item.quantity + action.item.quantity) : entry,
-      );
+      return list.map((entry, i) => {
+        if (i !== index) return entry;
+        const added = withQuantity(entry, entry.item.quantity + action.item.quantity);
+        return { ...added, item: { ...added.item, checked: false } };
+      });
     }
     case 'remove':
       return list.filter((entry) => entry.item.id !== action.id);
@@ -73,5 +79,13 @@ export function listReducer(list: readonly ListEntry[], action: ListAction): Lis
       return list.map((entry) =>
         entry.item.id === action.id ? withQuantity(entry, action.quantity) : entry,
       );
+    case 'setChecked':
+      return list.map((entry) =>
+        entry.item.id === action.id
+          ? { ...entry, item: { ...entry.item, checked: action.checked } }
+          : entry,
+      );
+    case 'clear':
+      return [];
   }
 }
