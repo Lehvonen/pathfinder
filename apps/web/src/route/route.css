@@ -1,4 +1,4 @@
-/* Route page: the stops in walking order. Phone first; tap targets are at least 44 px. */
+/* The route screens: overview and edit list. Phone first; tap targets are at least 44 px. */
 
 .route-page__header {
   display: flex;
@@ -28,22 +28,6 @@
   font-size: 15px;
 }
 
-/* The entrance above the stops and the checkout below them: quieter than a stop. */
-.route-page__end {
-  margin: 8px 0;
-  padding: 8px 12px;
-  font-size: 14px;
-  color: #444;
-  background: #f4f4f4;
-  border-radius: 8px;
-}
-
-.route-page__stops {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
 .route-page__unplaced {
   margin-top: 16px;
   padding: 8px 12px;
@@ -60,49 +44,6 @@
 .route-page__unplaced ul {
   margin: 0;
   padding-left: 20px;
-}
-
-/* ── One stop: its number, the place, the walk to it, its items ── */
-
-.route-stop {
-  display: flex;
-  gap: 12px;
-  padding: 10px 0;
-  border-bottom: 1px solid #eee;
-}
-
-.route-stop__number {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  font-weight: 700;
-  color: #fff;
-  background: #08060d;
-  border-radius: 50%;
-}
-
-.route-stop__body {
-  flex: 1;
-  min-width: 0;
-}
-
-.route-stop__place {
-  margin: 0;
-  font-size: 16px;
-}
-
-.route-stop__walk {
-  font-size: 13px;
-  color: #666;
-}
-
-.route-stop__items {
-  margin: 4px 0 0;
-  padding: 0;
-  font-size: 15px;
-  list-style: none;
 }
 
 /* ── Route overview: summary, map, then what to do ───────────── */
