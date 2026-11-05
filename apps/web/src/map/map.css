@@ -46,14 +46,15 @@
   vector-effect: non-scaling-stroke;
 }
 
-/* Walked and next share the deep green; what is still ahead is see-through. */
+/* Walked and next share the deep green; what is still ahead is a light green. Solid, not
+   see-through: see-through legs that share an aisle would add up to a darker green. */
 .store-map__leg--walked,
 .store-map__leg--next {
   stroke: #1b8a3c;
 }
 
 .store-map__leg--ahead {
-  stroke: rgb(27 138 60 / 35%);
+  stroke: #a9d3b5;
 }
 
 /* A stop: a circle a little wider than the line, so the line bulges there, with its number. */
