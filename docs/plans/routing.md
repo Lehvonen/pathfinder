@@ -1,6 +1,6 @@
 # Plan: routing
 
-**Status:** PR 1 (data) merged (#26). PR 2 (engine) in progress; PR 3 (web) after it.
+**Status:** PR 1 (data) merged (#26). PR 2 (engine) built and reviewed; PR 3 (web) after it.
 **A rough draft, not a source of truth**: the shortest route over a rough map. Where this file
 and the code disagree, the code wins.
 **Architecture refs:** §6 (generic entries, `CategoryPlacement`), §7 step 3 (shelf matching),
@@ -50,19 +50,26 @@ All in `packages/core`, framework-free, unit-tested on small hand-made graphs.
 
 1. **Resolve the list** (`route.ts`). A product goes to its node through
    `placements-primary.json`; a generic entry through `category-placements.json`. Items at
-   the same node are **one stop**. An item with no node is returned as **unplaced**, beside
-   the route, so `types.ts` does not change.
+   the same node are **one stop**. An item with no node, or one no entrance or no checkout
+   can be reached from, is returned as **unplaced**, beside the route, so `types.ts` does
+   not change. Checked items are left out.
 2. **Shortest paths** (`dijkstra.ts`). Edges are walkable both ways. **Shelf-access,
    checkout and entrance nodes are dead ends**: a path may start or end at one but never pass
    through it, since a block's centre node joins the aisles on its sides (§8). Run once from
    each stop and each entrance, over the whole graph (181 nodes, instant), keeping the
    distance and the path to every stop and checkout.
 3. **Order the stops** (`tsp.ts`), an open path from a fixed start:
-   - **≤ 15 stops: Held-Karp**, the exact shortest order.
-   - **> 15 stops: nearest-neighbour, then 2-opt**, within a few percent.
+   - **≤ 15 stops: Held-Karp**, the exact shortest order. 17 ms at 15 stops on a PC.
+   - **> 15 stops: nearest-neighbour, then 2-opt.** Not always close: measured at 15 stops
+     on the map (300 lists), 4 % longer than the shortest on average, 12 % for one list in
+     ten, up to about 30 %. Rare in practice, since the map has 42 places to stop.
    - **The checkout is chosen, not fixed:** the cost of ending after a stop is its distance
      to the nearest checkout, so the order and the checkout are optimised together.
-   - **Both entrances are tried**; the shorter route wins.
+   - **Every entrance that reaches all the stops is tried**; the shortest route wins. An
+     entrance joined to nothing is skipped.
+   - **A split map is an error:** if two stops can't reach each other, or no one entrance
+     reaches them all, `planRoute` throws a map error rather than leave a stop out. Neither
+     ever returns a partial order.
 4. **Build the `Route`** (the contract's type): the entrance, the stops in order (`order`
    1..n), each with the leg that reaches it as points, the checkout with its final leg, the
    total distance, and the minutes.
@@ -70,7 +77,9 @@ All in `packages/core`, framework-free, unit-tested on small hand-made graphs.
    an order of magnitude, not a promise.
 
 **Commits:** this plan; `dijkstra.ts` + test; `tsp.ts` + test (Held-Karp never longer than
-2-opt); `route.ts` + test; the `index.ts` exports.
+2-opt); `route.ts` + test; the `index.ts` exports. Then fixes from the review: no partial
+orders and tests at 15 and 16 stops; a test that entrances are dead ends; usable entrances
+only, the split-map error and two-checkout tests; these docs.
 
 ## 4. Web (PR 3)
 
@@ -87,7 +96,8 @@ All in `packages/core`, framework-free, unit-tested on small hand-made graphs.
 | Question                     | Decision                                                          |
 | ---------------------------- | ----------------------------------------------------------------- |
 | Exact or heuristic order     | **Held-Karp up to 15 stops**, nearest-neighbour + 2-opt above     |
-| Which entrance, which till   | **Both entrances tried; the checkout chosen with the order**      |
+| Which entrance, which till   | **Every entrance reaching all stops tried; checkout with order**  |
+| A split map                  | **A map error, thrown**; never a route with a stop left out       |
 | Items in the same department | **One stop**                                                      |
 | Generic entries              | **Generated category placements** until a hand-made table exists  |
 | An item with no node         | **Listed as unplaced**, never dropped silently, route still drawn |
@@ -103,6 +113,16 @@ From the PR #26 review, not fixed yet:
 - One `category-placements` test checks two things; one condition there can never be false.
 - The `types.ts` comment on `CategoryPlacement` still says "hand-maintained"; left until the
   table is, since `types.ts` changes need two reviewers.
+
+From the PR 2 review, not fixed yet:
+
+- **No connectivity check that respects dead ends** in `pnpm data:routing`: the graph check
+  walks through dead ends, so a split map is caught only when a route is planned. Add it to
+  the build (ARCHITECTURE.md §15 plans graph connectivity in CI).
+- **Nearest-neighbour + 2-opt can be 30 % off** (§3). Or-opt moves, or 2-opt from every
+  first stop, would close most of it; cheap at 42 places.
+- The test helpers `node` and `edge` are written out in both `dijkstra.test.ts` and
+  `route.test.ts`.
 
 ## 7. Not now
 

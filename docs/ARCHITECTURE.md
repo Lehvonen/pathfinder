@@ -462,10 +462,10 @@ critical path.
 - **Shelf polygons** — SVG paths in a local coordinate system with a known scale
 - **Walk graph** — nodes at aisle ends, junctions, entrance, checkouts, plus one
   access point per shelf section; edges weighted by real distance
-- **Access and checkout nodes are dead ends**: a route may start or end a leg at one but
-  never pass through it. A block open on several sides has one access node at its
+- **Access, checkout and entrance nodes are dead ends**: a route may start or end a leg at
+  one but never pass through it. A block open on several sides has one access node at its
   centre, linked to the aisle on each side, so passing through would cut through the
-  shelves
+  shelves; entrances and checkouts are where a route begins and ends
 
 ### Current state — a department-level draft
 
@@ -534,8 +534,11 @@ the shelf labels on the floor. The draft map adds its own list to check: the
 
 ## 9. Routing Engine
 
-The problem is an **open Travelling Salesman Problem** (fixed start at the entrance,
-fixed end at the checkout) layered on top of shortest-path search.
+The problem is an **open Travelling Salesman Problem** (start at an entrance, end at a
+checkout) layered on top of shortest-path search. The store has two entrances and three
+checkouts: every entrance that reaches all the stops is tried, and the checkout is chosen
+with the order, as the one nearest the last stop. Built in `packages/core`
+(`dijkstra.ts`, `tsp.ts`, `route.ts`); details in `docs/plans/routing.md`.
 
 **Pipeline:**
 
@@ -545,7 +548,8 @@ fixed end at the checkout) layered on top of shortest-path search.
    touches.
 3. Solve the TSP over that matrix:
    - **≤ 15 stops** — Held-Karp, exact optimum, runs instantly
-   - **> 15 stops** — nearest-neighbour + 2-opt, within a few percent
+   - **> 15 stops** — nearest-neighbour + 2-opt: measured at 15 stops on the map, 4 %
+     longer than the optimum on average, 12 % for one list in ten, up to about 30 %
 4. Apply the **frozen/chilled-last soft constraint** — a penalty for visiting
    temperature-controlled stops early. Real shoppers care about this, and it
    differentiates the result from a pure distance optimiser.
@@ -802,16 +806,16 @@ Monday. This outranks every checkbox below.
 
 ### Track D — Routing
 
-- [ ] Dijkstra; all-pairs matrix over only the nodes a list touches
-- [ ] Access and checkout nodes are dead ends: a leg may start or end at one but never pass through it, since a block's centre node joins the aisles on its sides (`docs/plans/map.md` §5)
+- [x] Dijkstra; all-pairs matrix over only the nodes a list touches (`dijkstra.ts`, run once per stop and entrance)
+- [x] Access, checkout and entrance nodes are dead ends: a leg may start or end at one but never pass through it, since a block's centre node joins the aisles on its sides (`docs/plans/map.md` §5)
 - [ ] Naive in-order routing, good enough for the first store run
-- [ ] Held-Karp (≤15 stops) and nearest-neighbour + 2-opt (>15)
+- [x] Held-Karp (≤15 stops) and nearest-neighbour + 2-opt (>15) (`tsp.ts`)
 - [ ] Serpentine baseline — the report's comparison number
-- [ ] Open path: entrance start, checkout end
+- [x] Open path: entrance start, checkout end; entrance and checkout chosen with the order
 - [ ] Frozen/chilled-last soft constraint
-- [ ] Generic entries resolved through `CategoryPlacement` before routing
-- [ ] Route returned as entrance, ordered stops each with its leg, and checkout
-- [ ] Unit tests on hand-verified routes over the mock graph
+- [x] Generic entries resolved through `CategoryPlacement` before routing _(the generated draft, §7)_
+- [x] Route returned as entrance, ordered stops each with its leg, and checkout (`route.ts`; items with no node returned as `unplaced`)
+- [x] Unit tests on hand-verified routes _(small hand-made graphs in the tests, not `data/mock/`)_
 - [ ] Property tests: starts at entrance, ends at checkout, every stop visited once, total distance matches the legs, **Held-Karp ≤ 2-opt**, frozen-last penalty never worse than with it off
 
 ### Track E — Search
@@ -1204,7 +1208,9 @@ time to fix what it reveals.
 | Graph source                               | `data/graph/` per section; merged into `data/build/core/graph.json`. Until the editor exists: one rough `department-level.json`                                                                                                                   | Parallel mapping without conflicts; hand-edited and generated files kept apart                                                                                                      |
 | Map source                                 | **K-Citymarket's own store map**, traced from its SVG; the SVG is not committed                                                                                                                                                                   | Exact outlines for free; the map is theirs and the repo is public                                                                                                                   |
 | Shelves before the detailed map            | **One `<department>:00` shelf per department**; any other shelf ID falls back to it                                                                                                                                                               | Every product routable now, with no change to the contract                                                                                                                          |
-| Access nodes                               | **Dead ends** for the router; a block open on several sides has one node at its centre                                                                                                                                                            | One `accessNodeId` per shelf, reachable from every side, never a shortcut through shelves                                                                                           |
+| Entrance and checkout                      | **Chosen by the router**: every entrance reaching all stops is tried; the checkout is the one nearest the last stop, chosen with the order                                                                                                        | Two entrances and three checkouts; fixing one of each makes some lists visibly longer                                                                                               |
+| Split map                                  | **A map error, thrown**: two stops that can't reach each other, or no entrance reaching all of them, stop the route                                                                                                                               | Leaving a stop out silently would send the shopper home without it                                                                                                                  |
+| Access nodes                               | **Dead ends** for the router, as are checkouts and entrances; a block open on several sides has one node at its centre                                                                                                                            | One `accessNodeId` per shelf, reachable from every side, never a shortcut through shelves                                                                                           |
 | Ids from Finnish names                     | Lowercase kebab-case, **å, ä and ö kept**                                                                                                                                                                                                         | They are letters of their own; folding them changes the word                                                                                                                        |
 | Placement → node                           | Placement stores `shelfId` only; node derived from `Shelf.accessNodeId` at build time                                                                                                                                                             | One source of truth for where you stand to reach a shelf                                                                                                                            |
 | Shelf ID format                            | `<departmentId>:<shelf>`; `:00` is the department-wide shelf, drawn as one area                                                                                                                                                                   | Shelf numbers repeat in every department; about half of all products have a department but no shelf, and this routes them without a type change                                     |
