@@ -674,19 +674,19 @@ Inline SVG in three layers: shelf polygons, route legs, markers.
 
 Stop count, estimated distance, estimated time.
 
-### Route page — current state, a rough first version
+### Route overview — current state, a rough first version
 
-`apps/web/src/route/`. The routing data (about 230 KB gzipped) loads in the background once
-search is ready, so it never slows the first search (§14); if it fails, pressing "Laske
-reitti" again loads it again, since a reload would empty the list. "Laske reitti" plans the
-route for the list as it is then and shows it in place of search, with focus on its heading:
-the trip summary ("12 pysähdystä · 322 m · noin 9 min"), the entrance, the numbered stops
-in walking order, each with its area name from the store map, the walk from the previous
-stop and its items with amounts, then the checkout, and any items with no place. Data
-still loading, data that failed to load and a map error each show a message instead; the
-loading message turns into the route by itself when the data lands. Editing the list
-afterwards does not change the route; pressing the button again does.
-**No map yet**: the map view above is the next step. Plan: `docs/plans/routing.md` §4.
+`apps/web/src/route/`, `apps/web/src/map/`. The routing data (about 230 KB gzipped) loads in
+the background once search is ready, so it never slows the first search (§14). "Laske
+reitti" plans the route from every entrance for the list as it is then, and shows the
+**route overview** in place of search: the trip summary ("12 pysähdystä · 322 m · noin 9
+min"), **the whole route on the store map** (grey areas, no other lines, the route in green
+with numbered nodes), "Aloita: Sisäänkäynti 1", then **"Muokkaa listaa"** (amounts, remove,
+"+ Lisää tuotteita") and **"Vaihda aloituspaikka"**, instant since both entrances are
+planned. **Entrance 1 is the default.** The list panel only shows on search. Data still
+loading, data that failed to load (with "Yritä uudelleen") and a map error each show a
+message instead. The shopping screen, ticks and gestures come next. Plan:
+`docs/plans/route-map.md`.
 
 ### Offline
 
@@ -849,9 +849,9 @@ Monday. This outranks every checkbox below.
 
 - [ ] App shell, mobile layout, navigation
 - [x] List builder, rough version: a closable panel at the bottom of every page; add, remove, amount per item; "Laske reitti" opens the route page; in memory only (§11)
-- [x] Route page, rough version: numbered stops with area names and items, entrance and checkout, unplaced items, messages for loading and map errors; no map yet (§11)
+- [x] Route overview, rough version: summary, the route on the store map, start at entrance 1 or switch, edit list, messages for loading and map errors (§11, `docs/plans/route-map.md`)
 - [ ] List builder, the rest: reorder, check off; Zustand + `localStorage`
-- [ ] SVG map: shelf polygons, route legs, numbered pins
+- [ ] SVG map: shelf polygons, route legs, numbered pins _(rough version at department level: area shapes, the route in green, numbered nodes; shelf polygons wait for the detailed map)_
 - [ ] Three path states; animated current leg
 - [ ] Auto-zoom to current leg, full-route toggle
 - [ ] Check-off advances the map
