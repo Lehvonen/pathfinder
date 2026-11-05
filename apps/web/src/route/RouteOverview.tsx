@@ -1,5 +1,5 @@
-import { useEffect, useId, useRef } from 'react';
-import { boundsOf, legsOf } from '../map/mapView';
+import { useId } from 'react';
+import { routeFocus } from '../map/mapView';
 import StoreMap from '../map/StoreMap';
 import {
   chosenRoute,
@@ -11,6 +11,7 @@ import {
   placeName,
   type RouteView,
 } from './routeView';
+import { useFocusOnMount } from './useFocusOnMount';
 
 type RouteOverviewProps = {
   view: RouteView;
@@ -37,11 +38,7 @@ type RouteOverviewProps = {
 function RouteOverview(props: RouteOverviewProps) {
   const { view, start, onChangeStart, onEditList, onBack, onRetry, onStartShopping } = props;
   const titleId = useId();
-  const title = useRef<HTMLHeadingElement>(null);
-
-  useEffect(() => {
-    title.current?.focus();
-  }, []);
+  const title = useFocusOnMount<HTMLHeadingElement>();
 
   const header = (
     <header className="route-page__header">
@@ -85,7 +82,8 @@ function RouteOverview(props: RouteOverviewProps) {
           areas={view.areas}
           route={route}
           current={0}
-          focus={boundsOf(legsOf(route).flat())}
+          // The same object for the same route, so the map is not redrawn (StoreMap is memo).
+          focus={routeFocus(route)}
           label={`Kartta: reitti, ${formatStops(route.stops.length)}`}
         />
       </div>
