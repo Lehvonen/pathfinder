@@ -5,6 +5,7 @@ import { bestOrder, tourLength, type TourCosts } from './tsp';
 import type {
   CategoryPlacement,
   Graph,
+  GraphNode,
   ListItem,
   PrimaryPlacements,
   Route,
@@ -23,6 +24,8 @@ export type RoutingData = {
   walk: WalkGraph;
   placements: PrimaryPlacements;
   categoryNodes: ReadonlyMap<number, string>;
+  entrances: readonly string[];
+  checkouts: readonly string[];
 };
 
 export function toRoutingData(
@@ -30,16 +33,21 @@ export function toRoutingData(
   placements: PrimaryPlacements,
   categoryPlacements: readonly CategoryPlacement[],
 ): RoutingData {
+  const idsOf = (kind: GraphNode['kind']) =>
+    graph.nodes.filter((node) => node.kind === kind).map((node) => node.id);
   return {
     walk: toWalkGraph(graph),
     placements,
     categoryNodes: new Map(categoryPlacements.map((p) => [p.categoryId, p.nodeId])),
+    entrances: idsOf('entrance'),
+    checkouts: idsOf('checkout'),
   };
 }
 
 /**
  * The route, and the items it could not include: no node for the product or category, or a
- * node no route can reach. They are listed, never dropped silently.
+ * node no entrance or no checkout can be reached from. They are listed, never dropped
+ * silently.
  */
 export type RouteResult = { route: Route; unplaced: ListItem[] };
 
@@ -49,17 +57,22 @@ function nodeOf(item: ListItem, data: RoutingData): string | undefined {
     : data.categoryNodes.get(item.categoryId);
 }
 
+/** A broken map, not a broken list: the route can't be planned until the map is fixed. */
+function mapError(problem: string): Error {
+  return new Error(`planRoute: map error: ${problem}`);
+}
+
 /**
  * Plans the shortest walk for the unchecked items on a list: from an entrance, past every
- * stop once, to the checkout nearest the last stop. Items at the same node are one stop.
- * Both entrances are tried and the shorter route wins; a tie goes to the first in the graph.
+ * stop once, to the checkout nearest the last stop, so the order and the checkout are
+ * chosen together. Items at the same node are one stop. Every entrance that reaches all the
+ * stops is tried and the shortest route wins; a tie goes to the first in the graph.
+ *
+ * Throws a map error when two stops can't reach each other, or no one entrance reaches them
+ * all: the map is split, and leaving stops out would be wrong.
  */
 export function planRoute(items: readonly ListItem[], data: RoutingData): RouteResult {
-  const { walk } = data;
-  const nodesOfKind = (kind: string) =>
-    [...walk.nodes.values()].filter((node) => node.kind === kind).map((node) => node.id);
-  const entrances = nodesOfKind('entrance');
-  const checkouts = nodesOfKind('checkout');
+  const { walk, entrances, checkouts } = data;
   if (entrances.length === 0 || checkouts.length === 0) {
     throw new Error('planRoute: the graph needs an entrance and a checkout');
   }
@@ -73,15 +86,17 @@ export function planRoute(items: readonly ListItem[], data: RoutingData): RouteR
     }
     return found;
   };
+  /** Metres from one node to another; undefined if no walk joins them. */
+  const distance = (from: string, to: string) => pathsFrom(from).distance.get(to);
   const nearestCheckout = (from: string) => {
-    let best: string | undefined;
+    let nearest: string | undefined;
     for (const checkout of checkouts) {
-      const d = pathsFrom(from).distance.get(checkout);
-      if (d !== undefined && (best === undefined || d < pathsFrom(from).distance.get(best)!)) {
-        best = checkout;
+      const d = distance(from, checkout);
+      if (d !== undefined && (nearest === undefined || d < distance(from, nearest)!)) {
+        nearest = checkout;
       }
     }
-    return best;
+    return nearest;
   };
 
   // 1. Each unchecked item to its node; items at one node share a stop, in list order.
@@ -93,7 +108,7 @@ export function planRoute(items: readonly ListItem[], data: RoutingData): RouteR
     const reachable =
       nodeId !== undefined &&
       walk.nodes.has(nodeId) &&
-      entrances.every((entrance) => pathsFrom(entrance).distance.has(nodeId)) &&
+      entrances.some((entrance) => distance(entrance, nodeId) !== undefined) &&
       nearestCheckout(nodeId) !== undefined;
     if (!reachable) {
       unplaced.push(item);
@@ -103,13 +118,25 @@ export function planRoute(items: readonly ListItem[], data: RoutingData): RouteR
   }
   const stopIds = [...itemsAt.keys()];
 
-  // 2. The best order from each entrance; keep the shorter.
-  const between = stopIds.map((a) => stopIds.map((b) => pathsFrom(a).distance.get(b)!));
-  const toEnd = stopIds.map((id) => pathsFrom(id).distance.get(nearestCheckout(id)!)!);
+  // 2. Every stop must reach every other, and some entrance must reach them all.
+  for (const a of stopIds) {
+    const cut = stopIds.find((b) => distance(a, b) === undefined);
+    if (cut !== undefined) throw mapError(`no walk from ${a} to ${cut}`);
+  }
+  const usable = entrances.filter((entrance) =>
+    stopIds.length > 0
+      ? stopIds.every((id) => distance(entrance, id) !== undefined)
+      : nearestCheckout(entrance) !== undefined,
+  );
+  if (usable.length === 0) throw mapError('no entrance reaches every stop');
+
+  // 3. The best order from each usable entrance; keep the shortest.
+  const between = stopIds.map((a) => stopIds.map((b) => distance(a, b)!));
+  const toEnd = stopIds.map((id) => distance(id, nearestCheckout(id)!)!);
   let best: { entrance: string; order: number[]; length: number } | undefined;
-  for (const entrance of entrances) {
+  for (const entrance of usable) {
     const costs: TourCosts = {
-      fromStart: stopIds.map((id) => pathsFrom(entrance).distance.get(id)!),
+      fromStart: stopIds.map((id) => distance(entrance, id)!),
       between,
       toEnd,
     };
@@ -117,38 +144,37 @@ export function planRoute(items: readonly ListItem[], data: RoutingData): RouteR
     const length =
       stopIds.length > 0
         ? tourLength(costs, order)
-        : (pathsFrom(entrance).distance.get(nearestCheckout(entrance) ?? '') ?? Infinity);
+        : distance(entrance, nearestCheckout(entrance)!)!;
     if (best === undefined || length < best.length) best = { entrance, order, length };
   }
 
-  // 3. Expand the order into legs: each the walk from the previous point.
+  // 4. Expand the order into legs: each the walk from the previous point.
   const point = (nodeId: string): RoutePoint => {
     const { x, y } = walk.nodes.get(nodeId)!;
     return { nodeId, x, y };
   };
   const legFrom = (from: string, to: string): RouteLeg => ({
     leg: pathTo(pathsFrom(from), to)!.map((id) => {
-      const { x, y } = walk.nodes.get(id)!;
+      const { x, y } = point(id);
       return [x, y];
     }),
-    legDistance: pathsFrom(from).distance.get(to)!,
+    legDistance: distance(from, to)!,
   });
 
   const start = best!.entrance;
+  const stops: RouteStop[] = [];
   let previous = start;
-  const stops: RouteStop[] = best!.order.map((index, i) => {
+  for (const index of best!.order) {
     const nodeId = stopIds[index]!;
-    const stop = {
+    stops.push({
       ...point(nodeId),
       ...legFrom(previous, nodeId),
-      order: i + 1,
+      order: stops.length + 1,
       items: itemsAt.get(nodeId)!,
-    };
+    });
     previous = nodeId;
-    return stop;
-  });
-  const checkout = nearestCheckout(previous);
-  if (checkout === undefined) throw new Error(`planRoute: no checkout reachable from ${previous}`);
+  }
+  const checkout = nearestCheckout(previous)!;
   const end = { ...point(checkout), ...legFrom(previous, checkout) };
 
   const totalDistance = stops.reduce((sum, stop) => sum + stop.legDistance, end.legDistance);

@@ -159,3 +159,82 @@ describe('planRoute', () => {
     );
   });
 });
+
+describe('planRoute: choosing the checkout', () => {
+  // A second checkout, out2, at the west end of the aisle, 1 m from j0.
+  const twoCheckouts = toRoutingData(
+    {
+      ...graph,
+      nodes: [...graph.nodes, node('out2', 0, 6, 'checkout')],
+      edges: [...graph.edges, edge('j0', 'out2', 1)],
+    },
+    { '1': { nodeId: 'a', categoryId: 10 }, '2': { nodeId: 'b', categoryId: 10 } },
+    [],
+  );
+
+  it('ends at the checkout nearest the last stop', () => {
+    // a → out2 is 16, a → out 30: west → a → out2 = 20 + 16.
+    const { route } = planRoute([product('1')], twoCheckouts);
+    expect(route.end.nodeId).toBe('out2');
+    expect(route.totalDistance).toBe(36);
+  });
+
+  it('chooses the entrance, the order and the checkout together', () => {
+    // West → a → b → out is 60. East → b → a → out2 is 20 + 20 + 16 = 56: shorter, though
+    // neither its entrance nor its checkout is the nearest to the first stop alone.
+    const { route } = planRoute([product('1'), product('2')], twoCheckouts);
+    expect(route.start.nodeId).toBe('east');
+    expect(route.stops.map((stop) => stop.nodeId)).toEqual(['b', 'a']);
+    expect(route.end.nodeId).toBe('out2');
+    expect(route.totalDistance).toBe(56);
+  });
+});
+
+describe('planRoute: a broken map', () => {
+  it('skips an entrance joined to nothing, and still routes every item', () => {
+    const looseEntrance = toRoutingData(
+      { ...graph, nodes: [...graph.nodes, node('loose', 99, 99, 'entrance')] },
+      { '1': { nodeId: 'a', categoryId: 10 }, '2': { nodeId: 'b', categoryId: 10 } },
+      [],
+    );
+    const { route, unplaced } = planRoute([product('1'), product('2')], looseEntrance);
+    expect(unplaced).toEqual([]);
+    expect(route.start.nodeId).toBe('west');
+    expect(route.totalDistance).toBe(60);
+  });
+
+  it('throws a map error when two stops cannot reach each other, rather than drop one', () => {
+    //   in ── j1 ── a        Two aisles joined only through the entrance and the checkout,
+    //    └─── j2 ── b        which a walk may not pass through: a and b can't reach each
+    //   out ─ j1, j2         other.
+    const split = toRoutingData(
+      {
+        version: 1,
+        nodes: [
+          node('in', 0, 0, 'entrance'),
+          node('out', 0, 10, 'checkout'),
+          node('j1', 5, 0, 'junction'),
+          node('j2', 5, 10, 'junction'),
+          node('a', 10, 0, 'shelf-access'),
+          node('b', 10, 10, 'shelf-access'),
+        ],
+        edges: [
+          edge('in', 'j1', 5),
+          edge('in', 'j2', 5),
+          edge('out', 'j1', 5),
+          edge('out', 'j2', 5),
+          edge('j1', 'a', 5),
+          edge('j2', 'b', 5),
+        ],
+        shelves: [],
+      },
+      { '1': { nodeId: 'a', categoryId: 10 }, '2': { nodeId: 'b', categoryId: 10 } },
+      [],
+    );
+    expect(() => planRoute([product('1'), product('2')], split)).toThrow(
+      'map error: no walk from a to b',
+    );
+    // Either item alone is fine.
+    expect(planRoute([product('2')], split).route.stops.map((stop) => stop.nodeId)).toEqual(['b']);
+  });
+});
