@@ -1,6 +1,6 @@
 # Plan: routing
 
-**Status:** PR 1 (data) merged (#26). PR 2 (engine) built and reviewed; PR 3 (web) after it.
+**Status:** PR 1 (data) merged (#26), PR 2 (engine) merged (#27), PR 3 (web) built.
 **A rough draft, not a source of truth**: the shortest route over a rough map. Where this file
 and the code disagree, the code wins.
 **Architecture refs:** §6 (generic entries, `CategoryPlacement`), §7 step 3 (shelf matching),
@@ -91,8 +91,15 @@ only, the split-map error and two-checkout tests; these docs.
 - **Route page:** numbered stops, each with its area name and its items with amounts; total
   metres and minutes; unplaced items listed; a "Takaisin" button. The list panel stays.
 - **A map error** (`planRoute` throws on a split map, §3) shows a message in place of the
-  route, never a blank or broken page.
+  route, never a blank or broken page. So do data still loading and data that failed to
+  load.
 - **No map yet.** Drawing the route is the step after this.
+
+**Built** in `apps/web/src/route/`: `loadRoutingData.ts` (fetch, index), `routeView.ts`
+(the route or a message; place names, distances, minutes), `useRoutingData.ts` (loads once
+when the app opens), `RouteStopRow.tsx`, `RoutePage.tsx`, `route.css`; `App.tsx` connects
+the button. Place names come from the node id's area in `areas.json`; an area with no label
+and an entrance are named from the id ("Sisäänkäynti 1").
 
 ## 5. Decisions, for now
 
