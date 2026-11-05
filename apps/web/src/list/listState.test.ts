@@ -1,6 +1,24 @@
 import type { ListItem } from '@pathfinder/core';
-import { describe, expect, it } from 'vitest';
-import { clampQuantity, type ListEntry, listReducer, MAX_QUANTITY } from './listState';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { clampQuantity, type ListEntry, listReducer, MAX_QUANTITY, newItemId } from './listState';
+
+describe('newItemId', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('uses crypto.randomUUID where the page has it', () => {
+    vi.stubGlobal('crypto', { randomUUID: () => 'uuid-1' });
+    expect(newItemId()).toBe('uuid-1');
+  });
+
+  it('still makes different ids on a plain-http page, which has no crypto.randomUUID', () => {
+    vi.stubGlobal('crypto', {});
+    const ids = Array.from({ length: 100 }, () => newItemId());
+    expect(new Set(ids).size).toBe(100);
+    expect(ids.every((id) => id.length > 0)).toBe(true);
+  });
+});
 
 const milk: ListItem = { id: 'a', kind: 'product', ean: '111', quantity: 1, checked: false };
 const bread: ListItem = { id: 'b', kind: 'product', ean: '222', quantity: 1, checked: false };

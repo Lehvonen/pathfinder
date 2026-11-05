@@ -21,6 +21,20 @@ export function clampQuantity(quantity: number): number {
   return Math.min(MAX_QUANTITY, Math.max(1, Math.round(quantity)));
 }
 
+let idCount = 0;
+
+/**
+ * A new `ListItem` id. `crypto.randomUUID()` exists only on secure pages (https and
+ * localhost), not on the dev server opened from a phone over the local network
+ * (`http://192.168.…`). There, the time plus a counter does: an id only has to be unique
+ * within one list, and ids are made again when a shared list is loaded.
+ */
+export function newItemId(): string {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  idCount += 1;
+  return `${Date.now().toString(36)}-${idCount.toString(36)}`;
+}
+
 /** The same thing on the list: one product, or one generic word in one category. */
 function isSameThing(a: ListItem, b: ListItem): boolean {
   if (a.kind === 'product' && b.kind === 'product') return a.ean === b.ean;
