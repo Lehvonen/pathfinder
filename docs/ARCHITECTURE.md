@@ -158,6 +158,7 @@ Revisit only after submission, if the app is actually being used.
 │   ├── validate-data.ts     Zod schemas + graph integrity checks (planned; the schemas so far are in scraper/normalise/schema.ts)
 │   ├── build-data.ts        data/normalised/ + data/graph/ → data/build/, stamps version (planned)
 │   ├── build-search.ts      the search half of it: tiers, category data, aliases → data/build/core/
+│   ├── build-routing.ts     the routing half: graph, placements, category placements, areas → data/build/core/
 │   └── seed-synthetic.ts    deterministic 50k-product / 400-node fixture (planned)
 │
 ├── .env.example             committed; VITE_DATA_SOURCE etc.
@@ -186,11 +187,12 @@ Revisit only after submission, if the app is actually being used.
 │   └── build/               generated bundles, committed
 │       ├── manifest.json    version + content hashes + tier sizes, never cached
 │       ├── core/            precached, required offline — budgeted, see §14
-│       │   ├── graph.json
-│       │   ├── floorplan.svg
+│       │   ├── graph.json                the walk graph, without its source note
+│       │   ├── areas.json                the map's areas and entrances, for stop names and the map view
+│       │   ├── floorplan.svg             (planned)
 │       │   ├── categories.json
 │       │   ├── placements-primary.json   EAN → { nodeId, categoryId }
-│       │   ├── category-placements.json  categoryId → nodeId, resolves generic entries
+│       │   ├── category-placements.json  categoryId → nodeId, resolves generic entries; generated for now
 │       │   ├── category-top.json         categoryId → [ean, …], top 10 SKUs of each subtree by popularity
 │       │   ├── category-rank.json        categoryId → rank of its best product, orders category results
 │       │   ├── aliases.json
@@ -333,7 +335,12 @@ summarised in §17, but where the two differ, `types.ts` is authoritative.
    **falls back to its department-wide shelf `<department>:00`**, and the build reports
    how many did; while the graph is department-level (§8) every shelf does. **A shelf
    with no match even then is logged as an error, not silently dropped** — that list is
-   the handoff between the data work and the map work.
+   the handoff between the data work and the map work. Done by `build-routing.ts`
+   (`pnpm data:routing`), which also writes `graph.json`, `areas.json` and
+   `category-placements.json`: all 39,479 products placed, 20,526 through the fallback,
+   none unmatched (2026-10-04 scrape). Until `CategoryPlacement` is hand-maintained, each
+   category is **generated**: the node holding most products of the category and its
+   subcategories, a rough draft.
 4. `diff.ts` compares against the previous scrape and reports what moved, appeared,
    or disappeared. Stores rearrange; this is how you notice.
 5. `build-search.ts` (`pnpm data:search`, the search half of `build-data.ts`) **splits
@@ -769,11 +776,12 @@ Monday. This outranks every checkbox below.
 - [x] Whole-store export (`scraper/export-kupittaa.ts`) written, output in `scraper/cache/kupittaa/` — first full run done 2026-10-03 (43,633 listed, 39,479 kept after cleaning)
 - [x] `normalise.ts` — raw → schema, EAN dedup, multi-placement handled, **no price, images or descriptions** _(the scrape gives one location per EAN, so every product has one primary placement for now; the types allow more)_
 - [ ] Full scrape reviewed by hand for junk, duplicates, missing shelves
-- [ ] Shelf IDs matched against `graph.json`, falling back to the department-wide `<department>:00` shelf; the fallback count reported, a shelf with no match even then logged as an error, never dropped _(ready: `data/graph/department-level.json` has a `:00` shelf for every department)_
+- [x] Shelf IDs matched against `graph.json`, falling back to the department-wide `<department>:00` shelf; the fallback count reported, a shelf with no match even then logged as an error, never dropped _(`pnpm data:routing`: 39,479 placed, 20,526 through the fallback, none unmatched)_
 - [ ] `diff.ts` — compare scrapes, report moved / new / removed
-- [ ] `pnpm data:build` — versioned bundles, manifest, **core/display tier split**; calls the search build (`pnpm data:search`, done: three search tiers, `category-top.json`, `category-rank.json`, aliases)
+- [ ] `pnpm data:build` — versioned bundles, manifest, **core/display tier split**; calls the search build (`pnpm data:search`, done: three search tiers, `category-top.json`, `category-rank.json`, aliases) and the routing build (`pnpm data:routing`, done: graph, placements, category placements, areas)
 - [ ] **Size measurement on real data**: run `data:build` over the partial real scrape as soon as one exists, record gzipped size per chunk and extrapolate to the full catalogue; use the synthetic fixture for scale beyond that. §14 budgets confirmed or adjusted once, before anyone builds against the bundle shape.
 - [ ] Frozen `data/e2e-fixture/` committed
+- [x] `CategoryPlacement`, rough draft: generated by `pnpm data:routing`, each category at the node with most of its products, shipped in the core tier
 - [ ] `CategoryPlacement` (`categoryId → nodeId`) hand-maintained, shipped in the core tier — the only way generic entries resolve, and the fallback when a product's shelf ID is unmatched
 - [ ] Finnish alias table (`aliases.json`), grown continuously — not a one-off task
 
@@ -929,6 +937,9 @@ starting budget to be confirmed or adjusted against that measurement, once, earl
   catalogue rather than repeat it. All search files together are **896 KB gzipped**
   (2026-10-04 scrape), and `build-search.ts` fails above 1 MB, the search share of
   this budget.
+- The routing files (graph, primary placements, category placements, areas) are
+  **225 KB gzipped**, almost all of it primary placements, and `build-routing.ts` fails
+  above 512 KB, the routing share.
 
 **Escape hatches, in the order they should be reached for**, if measurement shows core
 over budget:
@@ -1197,6 +1208,7 @@ time to fix what it reveals.
 | Ids from Finnish names                     | Lowercase kebab-case, **å, ä and ö kept**                                                                                                                                                                                                         | They are letters of their own; folding them changes the word                                                                                                                        |
 | Placement → node                           | Placement stores `shelfId` only; node derived from `Shelf.accessNodeId` at build time                                                                                                                                                             | One source of truth for where you stand to reach a shelf                                                                                                                            |
 | Shelf ID format                            | `<departmentId>:<shelf>`; `:00` is the department-wide shelf, drawn as one area                                                                                                                                                                   | Shelf numbers repeat in every department; about half of all products have a department but no shelf, and this routes them without a type change                                     |
+| Generic entries before a hand-made table   | **Generated**: each category at the node holding most products of it and its subcategories                                                                                                                                                        | Every generic entry routable now; replaced row by row once the table is hand-maintained                                                                                             |
 | Core placement data                        | `EAN → { nodeId, categoryId }` plus `CategoryPlacement`, both core tier                                                                                                                                                                           | Core alone must resolve every list entry and apply the frozen-last constraint                                                                                                       |
 | Search payload                             | Columnar `{ eans, names, categoryIds }` per tier                                                                                                                                                                                                  | Offline results render a name without the display tier; `categoryIds` (49 KB gzipped) lets the category page work before the graph exists                                           |
 | Search ranking and loading                 | **Ranked by Kesko popularity only**, no boosts. **Three tiers**: most popular food (equal share per food category, ~8,000), then remaining popular food plus popular non-clothing (~10,000), then the rest. Tier 1 loads first; **all precached** | Speed over size: nobody should wait to find milk. Word-start ranking was rejected on real data (`leipä` put cheese above bread). Popularity decides load order, not what is offline |
