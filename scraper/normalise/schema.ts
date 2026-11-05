@@ -120,11 +120,7 @@ function doubledArea(polygon: [number, number][]): number {
  */
 export function validateMapAreas(data: unknown): string[] {
   const result = mapAreasSchema.safeParse(data);
-  if (!result.success) {
-    return result.error.issues.map(
-      (issue) => `areas: ${issue.path.join('.') || '(file)'} ${issue.message}`,
-    );
-  }
+  if (!result.success) return issueLines('areas', result.error);
   const errors: string[] = [];
   const ids = new Set<string>();
   const claim = (kind: string, id: string) => {
@@ -135,6 +131,67 @@ export function validateMapAreas(data: unknown): string[] {
   for (const area of result.data.areas) {
     claim('area', area.id);
     if (doubledArea(area.polygon) === 0) errors.push(`area ${area.id}: polygon has no area`);
+  }
+  return errors;
+}
+
+/** One line per schema problem in a whole file, prefixed with the file's short name. */
+function issueLines(file: string, error: z.ZodError): string[] {
+  return error.issues.map(
+    (issue) => `${file}: ${issue.path.join('.') || '(file)'} ${issue.message}`,
+  );
+}
+
+/**
+ * data/curation/department-areas.json: which map area each department is in. `name` is
+ * K-Ruoka's department name, for whoever reviews the row. `reviewed: false` marks a row
+ * placed by judgement rather than by a map label; delete it once the row is checked in the
+ * store (docs/plans/map.md).
+ */
+export const departmentAreasSchema = z.array(
+  z.strictObject({
+    department: z.string().min(1),
+    area: kebabId,
+    name: z.string(),
+    reviewed: z.literal(false).optional(),
+  }),
+);
+
+/** A department as data/normalised/departments.json lists it, as far as this check needs. */
+export interface DepartmentSeen {
+  id: string;
+  name: string;
+  products: number;
+}
+
+/**
+ * Every problem in the department → area table, one line each. Empty means it is valid.
+ * Every department with products needs a row: without one its products cannot be routed,
+ * so a missing row is an error, never silently skipped (ARCHITECTURE.md §13, Track B).
+ */
+export function validateDepartmentAreas(
+  rows: unknown,
+  departments: DepartmentSeen[],
+  areaIds: ReadonlySet<string>,
+): string[] {
+  const result = departmentAreasSchema.safeParse(rows);
+  if (!result.success) return issueLines('department-areas', result.error);
+  const errors: string[] = [];
+  const known = new Set(departments.map((department) => department.id));
+  const mapped = new Set<string>();
+  for (const row of result.data) {
+    const prefix = `department ${row.department}:`;
+    if (mapped.has(row.department)) errors.push(`${prefix} duplicate row`);
+    mapped.add(row.department);
+    if (!known.has(row.department)) errors.push(`${prefix} no such department`);
+    if (!areaIds.has(row.area)) errors.push(`${prefix} no such area ${row.area}`);
+  }
+  for (const department of departments) {
+    if (department.products > 0 && !mapped.has(department.id)) {
+      errors.push(
+        `department ${department.id} (${department.name}): no area for its ${department.products} products`,
+      );
+    }
   }
   return errors;
 }

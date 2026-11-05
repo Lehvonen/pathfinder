@@ -9,13 +9,21 @@ import {
   categoryOverridesSchema,
   categorySchema,
   curatedDepartmentsSchema,
+  mapAreasSchema,
   placementSchema,
   popularitySchema,
   productSchema,
+  validateDepartmentAreas,
   validateMapAreas,
   validateNormalised,
+  type DepartmentSeen,
   type NormalisedData,
 } from './schema';
+
+/** A committed data file, read from the repo root. */
+function readData(path: string): unknown {
+  return JSON.parse(readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8'));
+}
 
 describe('schema types', () => {
   // Checked by the typecheck: a change to types.ts or departments.ts that a schema does
@@ -144,8 +152,59 @@ describe('validateMapAreas', () => {
   });
 
   it('accepts the committed data/graph/areas.json', () => {
-    const path = new URL('../../data/graph/areas.json', import.meta.url);
-    expect(validateMapAreas(JSON.parse(readFileSync(path, 'utf8')))).toEqual([]);
+    expect(validateMapAreas(readData('data/graph/areas.json'))).toEqual([]);
+  });
+});
+
+describe('validateDepartmentAreas', () => {
+  const areaIds = new Set(['maitokaappi', 'leipä']);
+  const milk = { id: '91208', name: '(MAITO) Maidot', products: 99 };
+  const bread = { id: '613', name: '(LEIPÄ) Leipähyllykalusteet', products: 315 };
+  const milkRow = { department: '91208', area: 'maitokaappi', name: milk.name };
+  const breadRow = { department: '613', area: 'leipä', name: bread.name, reviewed: false };
+
+  it('accepts a row for every department with products, reviewed or not', () => {
+    expect(validateDepartmentAreas([milkRow, breadRow], [milk, bread], areaIds)).toEqual([]);
+  });
+
+  it('does not need a row for a department with no products', () => {
+    const empty = { ...bread, products: 0 };
+    expect(validateDepartmentAreas([milkRow], [milk, empty], areaIds)).toEqual([]);
+  });
+
+  it.each([
+    ['reviewed: true', { ...milkRow, reviewed: true }],
+    ['an area id that is not kebab-case', { ...milkRow, area: 'Maitokaappi' }],
+    ['an unknown field', { ...milkRow, shelf: '05' }],
+    ['no department', { ...milkRow, department: '' }],
+  ])('rejects a row with %s', (_, bad) => {
+    expect(validateDepartmentAreas([bad], [milk], areaIds)).not.toEqual([]);
+  });
+
+  it('names a department with products but no row, so its products are never dropped', () => {
+    expect(validateDepartmentAreas([milkRow], [milk, bread], areaIds)).toEqual([
+      'department 613 ((LEIPÄ) Leipähyllykalusteet): no area for its 315 products',
+    ]);
+  });
+
+  it('rejects a duplicate row, an unknown department and an unknown area', () => {
+    const ghost = { ...milkRow, department: '1' };
+    const lost = { ...breadRow, area: 'kahvila' };
+    expect(
+      validateDepartmentAreas([milkRow, milkRow, ghost, lost], [milk, bread], areaIds),
+    ).toEqual([
+      'department 91208: duplicate row',
+      'department 1: no such department',
+      'department 613: no such area kahvila',
+    ]);
+  });
+
+  it('accepts the committed data/curation/department-areas.json', () => {
+    const map = mapAreasSchema.parse(readData('data/graph/areas.json'));
+    const departments = readData('data/normalised/departments.json') as DepartmentSeen[];
+    const rows = readData('data/curation/department-areas.json');
+    const areaIds = new Set(map.areas.map((area) => area.id));
+    expect(validateDepartmentAreas(rows, departments, areaIds)).toEqual([]);
   });
 });
 
