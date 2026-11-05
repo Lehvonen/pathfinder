@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ListEntry } from '../list/listState';
 import type { LoadedRouting, MapAreas } from './loadRoutingData';
 import {
+  CALCULATING,
   chosenRoute,
   formatDistance,
   formatMinutes,
@@ -12,6 +13,7 @@ import {
   nextEntrance,
   placeName,
   routeViewFor,
+  shownRouteView,
 } from './routeView';
 
 const areas: MapAreas = {
@@ -25,28 +27,30 @@ const areas: MapAreas = {
 
 // sisäänkäynti-1:0 ─5─ j:0 ─5─ maitokaappi:0
 // sisäänkäynti-2:0 ─1─┘└─5─ kassat-1:0
+const routingGraph: Graph = {
+  version: 1,
+  nodes: [
+    { id: 'sisäänkäynti-2:0', x: 1, y: 5, kind: 'entrance' },
+    { id: 'sisäänkäynti-1:0', x: 0, y: 0, kind: 'entrance' },
+    { id: 'j:0', x: 0, y: 5, kind: 'junction' },
+    { id: 'maitokaappi:0', x: 5, y: 5, kind: 'shelf-access' },
+    { id: 'kassat-1:0', x: 0, y: 10, kind: 'checkout' },
+  ],
+  edges: [
+    { from: 'sisäänkäynti-1:0', to: 'j:0', weight: 5 },
+    { from: 'sisäänkäynti-2:0', to: 'j:0', weight: 1 },
+    { from: 'j:0', to: 'maitokaappi:0', weight: 5 },
+    { from: 'j:0', to: 'kassat-1:0', weight: 5 },
+  ],
+  shelves: [],
+};
+const placements = { '111': { nodeId: 'maitokaappi:0', categoryId: 2 } };
+const categoryPlacements = [{ categoryId: 2, nodeId: 'maitokaappi:0' }];
+/** An entrance joined to nothing. */
+const looseEntrance = { id: 'sisäänkäynti-3:0', x: 50, y: 50, kind: 'entrance' } as const;
+
 const routing: LoadedRouting = {
-  data: toRoutingData(
-    {
-      version: 1,
-      nodes: [
-        { id: 'sisäänkäynti-2:0', x: 1, y: 5, kind: 'entrance' },
-        { id: 'sisäänkäynti-1:0', x: 0, y: 0, kind: 'entrance' },
-        { id: 'j:0', x: 0, y: 5, kind: 'junction' },
-        { id: 'maitokaappi:0', x: 5, y: 5, kind: 'shelf-access' },
-        { id: 'kassat-1:0', x: 0, y: 10, kind: 'checkout' },
-      ],
-      edges: [
-        { from: 'sisäänkäynti-1:0', to: 'j:0', weight: 5 },
-        { from: 'sisäänkäynti-2:0', to: 'j:0', weight: 1 },
-        { from: 'j:0', to: 'maitokaappi:0', weight: 5 },
-        { from: 'j:0', to: 'kassat-1:0', weight: 5 },
-      ],
-      shelves: [],
-    },
-    { '111': { nodeId: 'maitokaappi:0', categoryId: 2 } },
-    [{ categoryId: 2, nodeId: 'maitokaappi:0' }],
-  ),
+  data: toRoutingData(routingGraph, placements, categoryPlacements),
   areas,
 };
 
@@ -142,6 +146,30 @@ describe('routeViewFor', () => {
     expect(MESSAGES.loadFailed).not.toContain('lataa sivu');
   });
 
+  it('leaves out an entrance that cannot be planned from, and keeps the others', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    // A third entrance joined to nothing: planning from it alone is a map error.
+    const graph = { ...routingGraph, nodes: [...routingGraph.nodes, looseEntrance] };
+    const withLoose: LoadedRouting = {
+      data: toRoutingData(graph, placements, categoryPlacements),
+      areas,
+    };
+    const view = routeViewFor([product('a', '111', 'Maito')], withLoose, null);
+    if (view.kind !== 'route') throw new Error(`expected a route, got: ${view.text}`);
+    expect(view.entrances).toEqual(['sisäänkäynti-1:0', 'sisäänkäynti-2:0']);
+    expect(console.error).toHaveBeenCalledOnce();
+  });
+
+  it('is a map error, not a crash, with no entrance at all', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const noEntrance: LoadedRouting = { ...routing, data: { ...routing.data, entrances: [] } };
+    expect(routeViewFor([product('a', '111', 'Maito')], noEntrance, null)).toEqual({
+      kind: 'message',
+      text: MESSAGES.mapError,
+      canRetry: false,
+    });
+  });
+
   it('turns a split map into a message instead of throwing', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     //   sisäänkäynti-1:0 ── j1 ── maitokaappi:0     Two aisles joined only through the
@@ -187,6 +215,21 @@ describe('routeViewFor', () => {
     expect(console.error).toHaveBeenCalledWith(
       expect.objectContaining({ message: expect.stringContaining('map error') }),
     );
+  });
+});
+
+describe('shownRouteView', () => {
+  const list = [product('a', '111', 'Maito')];
+  const view = routeViewFor(list, routing, null);
+
+  it('shows the route once it is planned for the list asked for', () => {
+    expect(shownRouteView(view, list, list)).toBe(view);
+  });
+
+  it('shows "calculating" while the planning is for an older list, or not done', () => {
+    const newer = [...list];
+    expect(shownRouteView(view, list, newer)).toBe(CALCULATING);
+    expect(shownRouteView(null, null, list)).toBe(CALCULATING);
   });
 });
 
