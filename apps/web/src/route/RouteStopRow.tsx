@@ -9,7 +9,10 @@ type RouteStopRowProps = {
   names: ReadonlyMap<string, string>;
 };
 
-/** One stop on the route: its number, the place, the walk from the last stop, its items. */
+/**
+ * One stop on the route: its number, the place, the walk from the last stop ("45 m
+ * edellisestä", from the entrance for the first), its items.
+ */
 function RouteStopRow({ stop, place, names }: RouteStopRowProps) {
   return (
     <li className="route-stop">
@@ -21,7 +24,7 @@ function RouteStopRow({ stop, place, names }: RouteStopRowProps) {
           <span className="visually-hidden">{stop.order}. </span>
           {place}
         </h3>
-        <span className="route-stop__walk">+{formatDistance(stop.legDistance)}</span>
+        <span className="route-stop__walk">{formatDistance(stop.legDistance)} edellisestä</span>
         <ul className="route-stop__items">
           {stop.items.map((item) => (
             <li key={item.id}>
