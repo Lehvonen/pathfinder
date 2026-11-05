@@ -1,4 +1,5 @@
 import type { Route } from '@pathfinder/core';
+import type { MapAreas } from '../route/loadRoutingData';
 import { describe, expect, it } from 'vitest';
 import {
   drawOrder,
@@ -7,6 +8,7 @@ import {
   legsOf,
   legStates,
   routeFocus,
+  storeBounds,
   screenView,
   shortLabel,
   showsLabels,
@@ -134,5 +136,30 @@ describe('labels', () => {
         [0, 4],
       ]),
     ).toEqual([5, 2]);
+  });
+});
+
+describe('storeBounds', () => {
+  const areas: MapAreas = {
+    entrances: [{ id: 'sisäänkäynti-1', point: [120, 20] }],
+    areas: [
+      {
+        id: 'a',
+        kind: 'goods',
+        polygon: [
+          [0, 0],
+          [10, 0],
+          [10, 50],
+        ],
+      },
+    ],
+  };
+
+  it('covers every area and every entrance', () => {
+    expect(storeBounds(areas)).toEqual({ x: 0, y: 0, width: 120, height: 50 });
+  });
+
+  it('gives the same object for the same map', () => {
+    expect(storeBounds(areas)).toBe(storeBounds(areas));
   });
 });
