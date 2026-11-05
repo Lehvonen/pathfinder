@@ -107,9 +107,11 @@
 
 /* ── Route overview: summary, map, then what to do ───────────── */
 
+/* svh, not dvh: the map keeps its size while the address bar shows and hides, so the
+   screen does not jump and the map is not redrawn while scrolling. */
 .route-overview__map {
   height: 55vh;
-  height: 55dvh;
+  height: 55svh;
 }
 
 .route-overview__start {
@@ -135,12 +137,6 @@
 }
 
 /* ── Edit list ──────────────────────────────────────────────── */
-
-.list-edit__rows {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
 
 .list-edit__add {
   width: 100%;
