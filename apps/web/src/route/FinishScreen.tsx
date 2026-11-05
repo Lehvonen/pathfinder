@@ -3,20 +3,22 @@ import { useId, type CSSProperties } from 'react';
 import { legsOf, routeFocus } from '../map/mapView';
 import StoreMap from '../map/StoreMap';
 import type { MapAreas } from './loadRoutingData';
-import { formatElapsed, itemCount } from './progress';
+import { formatElapsed } from './progress';
 import { formatDistance } from './routeView';
 import { useFocusOnMount } from './useFocusOnMount';
 
 type FinishScreenProps = {
   route: Route;
   areas: MapAreas;
-  /** From "Aloita ostokset" to "Lopeta ostokset". */
+  /** From the first "Aloita ostokset" to "Lopeta ostokset", re-plans included. */
   elapsedMs: number;
+  /** Every item ticked on the list, each counted by its amount (`pickedCount`). */
+  picked: number;
   /** "Valmis": back to search with an empty list. */
   onDone(): void;
 };
 
-const CONFETTI_COLOURS = ['#1b8a3c', '#a9d3b5', '#5cb85c', '#0f5c27'];
+const CONFETTI_COLOURS = ['var(--route-deep)', 'var(--route-light)', '#5cb85c', '#0f5c27'];
 
 /** 30 pieces, spread across the screen with a fixed pattern: the same every time, no lag. */
 const CONFETTI = Array.from({ length: 30 }, (_, i) => ({
@@ -32,7 +34,7 @@ const CONFETTI = Array.from({ length: 30 }, (_, i) => ({
  * the trip in numbers and a short green confetti burst. None of the motion plays when the
  * phone asks for reduced motion.
  */
-function FinishScreen({ route, areas, elapsedMs, onDone }: FinishScreenProps) {
+function FinishScreen({ route, areas, elapsedMs, picked, onDone }: FinishScreenProps) {
   const titleId = useId();
   const title = useFocusOnMount<HTMLHeadingElement>();
 
@@ -59,7 +61,7 @@ function FinishScreen({ route, areas, elapsedMs, onDone }: FinishScreenProps) {
             Valmis!
           </h2>
           <p>
-            {itemCount(route)} tuotetta · {formatDistance(route.totalDistance)} · aikaa kului{' '}
+            {picked} tuotetta · {formatDistance(route.totalDistance)} · aikaa kului{' '}
             {formatElapsed(elapsedMs)}
           </p>
           <button type="button" onClick={onDone}>

@@ -2,7 +2,7 @@ import type { Category, ListItem, Route } from '@pathfinder/core';
 import type { ProductHit } from '@pathfinder/search';
 import { useDeferredValue, useMemo, useReducer, useState } from 'react';
 import ShoppingList from './list/ShoppingList';
-import { listReducer, newItemId, type ListEntry } from './list/listState';
+import { listReducer, newItemId, pickedCount, type ListEntry } from './list/listState';
 import FinishScreen from './route/FinishScreen';
 import ListEditPage from './route/ListEditPage';
 import type { MapAreas } from './route/loadRoutingData';
@@ -27,8 +27,11 @@ type Screen = 'search' | 'route' | 'edit' | 'shopping' | 'finish';
 /** The shop under way: the route fixed when "Aloita ostokset" was pressed, and when. */
 type Trip = {
   route: Route;
+  /** Items the route could not place, still shown in the open sheet. */
+  unplaced: readonly ListItem[];
   names: ReadonlyMap<string, string>;
   areas: MapAreas;
+  /** The first "Aloita ostokset": a re-plan mid-shop keeps it, so the time is the whole shop. */
   startedAt: number;
   finishedAt: number | null;
 };
@@ -61,7 +64,9 @@ function App() {
   );
   const shownView = shownRouteView(routeView, plannedList, routedList);
   const [trip, setTrip] = useState<Trip | null>(null);
-  // The ticks are the list's own: unticking on the shopping screen or in the list agrees.
+  // The ticks are the list's own (`checked`): the shopping screen ticks and unticks them, and
+  // the list panel and edit screen show them with "✓ Kerätty" to untick. A ticked item is
+  // left out of the next route, so that is how it gets back on.
   const ticked = useMemo(
     () => new Set(list.filter((entry) => entry.item.checked).map((entry) => entry.item.id)),
     [list],
@@ -85,18 +90,21 @@ function App() {
   const setQuantity = (id: string, quantity: number) =>
     dispatch({ type: 'setQuantity', id, quantity });
   const remove = (id: string) => dispatch({ type: 'remove', id });
+  const untick = (id: string) => dispatch({ type: 'setChecked', id, checked: false });
 
   /** Fixes the route on the overview and starts the shop; only offered once there is one. */
   const startShopping =
     shownView.kind === 'route'
       ? () => {
-          setTrip({
-            route: chosenRoute(shownView, start).result.route,
+          const { route, unplaced } = chosenRoute(shownView, start).result;
+          setTrip((current) => ({
+            route,
+            unplaced,
             names: shownView.names,
             areas: shownView.areas,
-            startedAt: Date.now(),
+            startedAt: current?.startedAt ?? Date.now(),
             finishedAt: null,
-          });
+          }));
           showScreen('shopping');
         }
       : undefined;
@@ -145,12 +153,14 @@ function App() {
           onTick={(id, checked) => dispatch({ type: 'setChecked', id, checked })}
           onBack={() => showScreen('search')}
           onFinish={finishShopping}
+          unplaced={trip.unplaced}
         />
       ) : screen === 'finish' && trip !== null ? (
         <FinishScreen
           route={trip.route}
           areas={trip.areas}
           elapsedMs={(trip.finishedAt ?? trip.startedAt) - trip.startedAt}
+          picked={pickedCount(list)}
           onDone={closeTrip}
         />
       ) : screen === 'route' ? (
@@ -168,6 +178,7 @@ function App() {
           list={list}
           onSetQuantity={setQuantity}
           onRemove={remove}
+          onUntick={untick}
           onAddMore={() => showScreen('search')}
           onBack={backFromEdit}
         />
@@ -206,6 +217,7 @@ function App() {
             list={list}
             onSetQuantity={setQuantity}
             onRemove={remove}
+            onUntick={untick}
             onCalculateRoute={showRoute}
           />
         </>
