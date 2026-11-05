@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import RouteStopRow from './RouteStopRow';
 import {
   formatDistance,
@@ -19,58 +19,75 @@ type RoutePageProps = {
  * §4): a summary, the entrance, the numbered stops with their items, the checkout, and
  * anything that could not be placed. A message stands in for all of it when there is no
  * route. Editing the list afterwards does not change it; pressing the button again does.
+ *
+ * Focus moves to the heading when the page opens, so a screen reader announces "Reitti"
+ * rather than staying on the button in the list panel.
  */
 function RoutePage({ view, onBack }: RoutePageProps) {
   const titleId = useId();
+  const title = useRef<HTMLHeadingElement>(null);
 
-  return (
-    <section className="route-page" aria-labelledby={titleId}>
-      <header className="route-page__header">
-        <button type="button" onClick={onBack}>
-          ← Takaisin
-        </button>
-        <h2 id={titleId}>Reitti</h2>
-      </header>
+  useEffect(() => {
+    title.current?.focus();
+  }, []);
 
-      {view.kind === 'message' ? (
+  const header = (
+    <header className="route-page__header">
+      <button type="button" onClick={onBack}>
+        ← Takaisin
+      </button>
+      <h2 id={titleId} ref={title} tabIndex={-1}>
+        Reitti
+      </h2>
+    </header>
+  );
+
+  if (view.kind === 'message') {
+    return (
+      <section className="route-page" aria-labelledby={titleId}>
+        {header}
         <p className="route-page__message" role="alert">
           {view.text}
         </p>
-      ) : (
-        <>
-          <p className="route-page__summary">
-            {formatStops(view.result.route.stops.length)} ·{' '}
-            {formatDistance(view.result.route.totalDistance)} ·{' '}
-            {formatMinutes(view.result.route.estimatedMinutes)}
-          </p>
-          <p className="route-page__end">
-            Aloita: <strong>{placeName(view.result.route.start.nodeId, view.areas)}</strong>
-          </p>
-          <ol className="route-page__stops">
-            {view.result.route.stops.map((stop) => (
-              <RouteStopRow
-                key={stop.nodeId}
-                stop={stop}
-                place={placeName(stop.nodeId, view.areas)}
-                names={view.names}
-              />
+      </section>
+    );
+  }
+
+  const { route, unplaced } = view.result;
+  const { names, areas } = view;
+  return (
+    <section className="route-page" aria-labelledby={titleId}>
+      {header}
+      <p className="route-page__summary">
+        {formatStops(route.stops.length)} · {formatDistance(route.totalDistance)} ·{' '}
+        {formatMinutes(route.estimatedMinutes)}
+      </p>
+      <p className="route-page__end">
+        Aloita: <strong>{placeName(route.start.nodeId, areas)}</strong>
+      </p>
+      <ol className="route-page__stops">
+        {route.stops.map((stop) => (
+          <RouteStopRow
+            key={stop.nodeId}
+            stop={stop}
+            place={placeName(stop.nodeId, areas)}
+            names={names}
+          />
+        ))}
+      </ol>
+      <p className="route-page__end">
+        Lopuksi: <strong>{placeName(route.end.nodeId, areas)}</strong> (
+        {formatDistance(route.end.legDistance)} edellisestä)
+      </p>
+      {unplaced.length > 0 && (
+        <section className="route-page__unplaced">
+          <h3>Ei reitillä: paikkaa ei löytynyt</h3>
+          <ul>
+            {unplaced.map((item) => (
+              <li key={item.id}>{itemName(item, names)}</li>
             ))}
-          </ol>
-          <p className="route-page__end">
-            Lopuksi: <strong>{placeName(view.result.route.end.nodeId, view.areas)}</strong> (+
-            {formatDistance(view.result.route.end.legDistance)})
-          </p>
-          {view.result.unplaced.length > 0 && (
-            <section className="route-page__unplaced">
-              <h3>Ei reitillä: paikkaa ei löytynyt</h3>
-              <ul>
-                {view.result.unplaced.map((item) => (
-                  <li key={item.id}>{itemName(item, view.names)}</li>
-                ))}
-              </ul>
-            </section>
-          )}
-        </>
+          </ul>
+        </section>
       )}
     </section>
   );
