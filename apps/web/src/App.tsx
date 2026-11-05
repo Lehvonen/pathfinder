@@ -2,7 +2,7 @@ import type { Category, ListItem } from '@pathfinder/core';
 import type { ProductHit } from '@pathfinder/search';
 import { useReducer, useState } from 'react';
 import ShoppingList from './list/ShoppingList';
-import { listReducer } from './list/listState';
+import { listReducer, newItemId } from './list/listState';
 import CategoryPage from './search/CategoryPage';
 import SearchBar from './search/SearchBar';
 import SearchResults from './search/SearchResults';
@@ -25,13 +25,13 @@ function App() {
   };
   const addProduct = (product: ProductHit) =>
     add(
-      { id: crypto.randomUUID(), kind: 'product', ean: product.ean, quantity: 1, checked: false },
+      { id: newItemId(), kind: 'product', ean: product.ean, quantity: 1, checked: false },
       product.name,
     );
   const addGeneric = (category: Category, label: string) =>
     add(
       {
-        id: crypto.randomUUID(),
+        id: newItemId(),
         kind: 'generic',
         categoryId: category.id,
         label,
