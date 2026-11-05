@@ -57,6 +57,12 @@ function nodeOf(item: ListItem, data: RoutingData): string | undefined {
     : data.categoryNodes.get(item.categoryId);
 }
 
+/** Choices for `planRoute`. */
+export type PlanOptions = {
+  /** Start at this entrance instead of the best one. Throws if it is not an entrance. */
+  start?: string;
+};
+
 /** A broken map, not a broken list: the route can't be planned until the map is fixed. */
 function mapError(problem: string): Error {
   return new Error(`planRoute: map error: ${problem}`);
@@ -66,16 +72,25 @@ function mapError(problem: string): Error {
  * Plans the shortest walk for the unchecked items on a list: from an entrance, past every
  * stop once, to the checkout nearest the last stop, so the order and the checkout are
  * chosen together. Items at the same node are one stop. Every entrance that reaches all the
- * stops is tried and the shortest route wins; a tie goes to the first in the graph.
+ * stops is tried and the shortest route wins; a tie goes to the first in the graph. With
+ * `options.start`, only that entrance is tried: the shopper chose where to start.
  *
  * Throws a map error when two stops can't reach each other, or no one entrance reaches them
- * all: the map is split, and leaving stops out would be wrong.
+ * all (the chosen one, if given): the map is split, and leaving stops out would be wrong.
  */
-export function planRoute(items: readonly ListItem[], data: RoutingData): RouteResult {
+export function planRoute(
+  items: readonly ListItem[],
+  data: RoutingData,
+  options: PlanOptions = {},
+): RouteResult {
   const { walk, entrances, checkouts } = data;
   if (entrances.length === 0 || checkouts.length === 0) {
     throw new Error('planRoute: the graph needs an entrance and a checkout');
   }
+  if (options.start !== undefined && !entrances.includes(options.start)) {
+    throw new Error(`planRoute: no entrance ${options.start}`);
+  }
+  const candidates = options.start === undefined ? entrances : [options.start];
 
   const paths = new Map<string, ShortestPaths>();
   const pathsFrom = (id: string) => {
@@ -123,7 +138,7 @@ export function planRoute(items: readonly ListItem[], data: RoutingData): RouteR
     const cut = stopIds.find((b) => distance(a, b) === undefined);
     if (cut !== undefined) throw mapError(`no walk from ${a} to ${cut}`);
   }
-  const usable = entrances.filter((entrance) =>
+  const usable = candidates.filter((entrance) =>
     stopIds.length > 0
       ? stopIds.every((id) => distance(entrance, id) !== undefined)
       : nearestCheckout(entrance) !== undefined,
