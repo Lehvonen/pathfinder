@@ -10,9 +10,12 @@ import {
   screenView,
   shortLabel,
   showsLabels,
+  storeBounds,
   type ScreenSize,
   type ViewBox,
 } from './mapView';
+import { glideView, viewBoxAttribute } from './panZoom';
+import { usePanZoom } from './usePanZoom';
 
 type StoreMapProps = {
   areas: MapAreas;
@@ -34,16 +37,32 @@ const NUMBER_PX = 12;
 const LABEL_PX = 11;
 /** The route line's width; map.css sets it in pixels, except while filling (below). */
 const LEG_PX = 6;
+/** How long the map takes to glide to a new focus. */
+const GLIDE_MS = 250;
+
+const prefersReducedMotion = () =>
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /**
  * The store map with the route on it: the areas as grey shapes, their names once zoomed in
  * far enough to fit, the route as a green line in three states, and a numbered node at each
  * stop. It fills its container and fits `focus` into it. It measures itself first and draws
  * nothing until then; after that it redraws only when its size or its props change (`memo`).
+ *
+ * Pinch, pan and the mouse wheel move the view (`usePanZoom`), changing the SVG directly with
+ * no redraw until the gesture ends. The view the shopper chose holds until `focus` changes;
+ * then the map glides to the new focus in GLIDE_MS (at once with reduced motion).
  */
 function StoreMap({ areas, route, current, focus, label, filling = false }: StoreMapProps) {
   const box = useRef<HTMLDivElement>(null);
+  const svg = useRef<SVGSVGElement>(null);
   const [size, setSize] = useState<ScreenSize | null>(null);
+  // The view a gesture ended on, for the focus it was made on: a new focus drops it.
+  const [chosen, setChosen] = useState<{ focus: ViewBox; view: ViewBox } | null>(null);
+  /** The view the SVG shows now, whoever set it: React, a gesture or the glide. */
+  const showing = useRef<ViewBox | null>(null);
+  const glide = useRef(0);
 
   useLayoutEffect(() => {
     const element = box.current;
@@ -62,10 +81,54 @@ function StoreMap({ areas, route, current, focus, label, filling = false }: Stor
     return () => observer.disconnect();
   }, []);
 
-  const shown = screenView(focus, size);
-  if (shown === null) return <div ref={box} className="store-map" />;
+  const fitted = screenView(focus, size);
+  const view = chosen !== null && chosen.focus === focus ? chosen.view : (fitted?.view ?? null);
+  const viewKey = view === null ? '' : viewBoxAttribute(view);
 
-  const { view, pixelsPerMetre } = shown;
+  usePanZoom({
+    target: box,
+    state: view === null || size === null ? null : { view, size, store: storeBounds(areas) },
+    onFrame: (next) => {
+      cancelAnimationFrame(glide.current);
+      showing.current = next;
+      svg.current?.setAttribute('viewBox', viewBoxAttribute(next));
+    },
+    onEnd: (next) => setChosen({ focus, view: next }),
+  });
+
+  // A new view from React (a new focus or size, not a gesture): glide to it from the one shown.
+  useLayoutEffect(() => {
+    const element = svg.current;
+    if (element === null || viewKey === '') return;
+    const [x, y, width, height] = viewKey.split(' ').map(Number) as [
+      number,
+      number,
+      number,
+      number,
+    ];
+    const to = { x, y, width, height };
+    const from = showing.current;
+    showing.current = to;
+    if (from === null || viewBoxAttribute(from) === viewKey || filling || prefersReducedMotion()) {
+      return;
+    }
+    cancelAnimationFrame(glide.current);
+    const started = performance.now();
+    const step = (now: number) => {
+      const t = Math.min((now - started) / GLIDE_MS, 1);
+      showing.current = glideView(from, to, t);
+      element.setAttribute('viewBox', viewBoxAttribute(showing.current));
+      if (t < 1) glide.current = requestAnimationFrame(step);
+    };
+    element.setAttribute('viewBox', viewBoxAttribute(from));
+    glide.current = requestAnimationFrame(step);
+  }, [viewKey, filling]);
+
+  useLayoutEffect(() => () => cancelAnimationFrame(glide.current), []);
+
+  if (view === null || size === null) return <div ref={box} className="store-map" />;
+
+  const pixelsPerMetre = size.width / view.width;
   const metres = (pixels: number) => pixels / pixelsPerMetre;
   const legs = legsOf(route);
   const states = legStates(legs.length, current);
@@ -76,11 +139,7 @@ function StoreMap({ areas, route, current, focus, label, filling = false }: Stor
       className={filling ? 'store-map store-map--filling' : 'store-map'}
       style={filling ? ({ '--legs': legs.length } as CSSProperties) : undefined}
     >
-      <svg
-        viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`}
-        role="img"
-        aria-label={label}
-      >
+      <svg ref={svg} viewBox={viewKey} role="img" aria-label={label}>
         <g>
           {areas.areas.map((area) => (
             <path

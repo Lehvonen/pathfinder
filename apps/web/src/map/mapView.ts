@@ -2,6 +2,7 @@
 // size, how to draw the route's legs, and when names fit (docs/plans/route-map.md). Metres
 // throughout, origin top-left, y down (types.ts). Plain geometry lives in core (§17).
 import { boundsOf, fitView, type Route, type ViewBox } from '@pathfinder/core';
+import type { MapAreas } from '../route/loadRoutingData';
 
 // The map's geometry from one place, for the map components.
 export { boundsOf, fitView, pathData, type ViewBox } from '@pathfinder/core';
@@ -32,6 +33,21 @@ export function screenView(
 /** Every leg of a route as points: one per stop, then the walk to the checkout. */
 export function legsOf(route: Route): Point[][] {
   return [...route.stops.map((stop) => stop.leg), route.end.leg];
+}
+
+const storeCache = new WeakMap<MapAreas, ViewBox>();
+
+/** The whole store: every area and entrance. Panning keeps the view's centre inside it. */
+export function storeBounds(areas: MapAreas): ViewBox {
+  let bounds = storeCache.get(areas);
+  if (bounds === undefined) {
+    bounds = boundsOf([
+      ...areas.areas.flatMap((area) => area.polygon),
+      ...areas.entrances.map((entrance) => entrance.point),
+    ]);
+    storeCache.set(areas, bounds);
+  }
+  return bounds;
 }
 
 const focusCache = new WeakMap<Route, ViewBox>();
