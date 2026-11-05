@@ -72,13 +72,23 @@ describe('shortestPaths', () => {
     expect(paths.distance.get('out')).toBe(1.5);
   });
 
-  it('never walks through an entrance or a checkout either', () => {
+  it('never walks through a checkout', () => {
     const g = store();
     // A short cut from a to c through the checkout, which must not be taken.
     g.edges.push(edge('a', 'out', 0.1));
     const paths = shortestPaths(toWalkGraph(g), 'a');
     expect(paths.distance.get('out')).toBe(0.1);
     expect(paths.distance.get('c')).toBe(2);
+  });
+
+  it('never walks through an entrance', () => {
+    const g = store();
+    // The entrance joined to c as well: a → in → c is 1.5, but the walk must go by b.
+    g.edges.push(edge('in', 'c', 0.5));
+    const paths = shortestPaths(toWalkGraph(g), 'a');
+    expect(paths.distance.get('in')).toBe(1);
+    expect(paths.distance.get('c')).toBe(2);
+    expect(pathTo(paths, 'c')).toEqual(['a', 'b', 'c']);
   });
 
   it('leaves out nodes it cannot reach', () => {
