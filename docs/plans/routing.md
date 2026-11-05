@@ -62,7 +62,8 @@ All in `packages/core`, framework-free, unit-tested on small hand-made graphs.
    - **≤ 15 stops: Held-Karp**, the exact shortest order. 17 ms at 15 stops on a PC.
    - **> 15 stops: nearest-neighbour, then 2-opt.** Not always close: measured at 15 stops
      on the map (300 lists), 4 % longer than the shortest on average, 12 % for one list in
-     ten, up to about 30 %. Rare in practice, since the map has 42 places to stop.
+     ten, up to about 30 %. How often real lists pass 15 stops is not measured; 30 random
+     products already gave 15 stops, 60 gave 21, though real lists are likely more clustered.
    - **The checkout is chosen, not fixed:** the cost of ending after a stop is its distance
      to the nearest checkout, so the order and the checkout are optimised together.
    - **Every entrance that reaches all the stops is tried**; the shortest route wins. An
@@ -89,6 +90,8 @@ only, the split-map error and two-checkout tests; these docs.
   afterwards does not move the route; pressing the button again does.
 - **Route page:** numbered stops, each with its area name and its items with amounts; total
   metres and minutes; unplaced items listed; a "Takaisin" button. The list panel stays.
+- **A map error** (`planRoute` throws on a split map, §3) shows a message in place of the
+  route, never a blank or broken page.
 - **No map yet.** Drawing the route is the step after this.
 
 ## 5. Decisions, for now

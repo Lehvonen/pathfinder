@@ -181,7 +181,7 @@ describe('planRoute: choosing the checkout', () => {
 
   it('chooses the entrance, the order and the checkout together', () => {
     // West → a → b → out is 60. East → b → a → out2 is 20 + 20 + 16 = 56: shorter, though
-    // neither its entrance nor its checkout is the nearest to the first stop alone.
+    // out2 is not the checkout nearest b (26 m against out's 20 m), the first stop.
     const { route } = planRoute([product('1'), product('2')], twoCheckouts);
     expect(route.start.nodeId).toBe('east');
     expect(route.stops.map((stop) => stop.nodeId)).toEqual(['b', 'a']);
