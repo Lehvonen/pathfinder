@@ -1,4 +1,4 @@
-import type { ListEntry } from './shoppingList';
+import type { ListEntry } from './listState';
 import ShoppingListRow from './ShoppingListRow';
 
 type ShoppingListProps = {

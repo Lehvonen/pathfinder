@@ -1,6 +1,6 @@
 import type { ListItem } from '@pathfinder/core';
 import { describe, expect, it } from 'vitest';
-import { clampQuantity, type ListEntry, listReducer, MAX_QUANTITY } from './shoppingList';
+import { clampQuantity, type ListEntry, listReducer, MAX_QUANTITY } from './listState';
 
 const milk: ListItem = { id: 'a', kind: 'product', ean: '111', quantity: 1, checked: false };
 const bread: ListItem = { id: 'b', kind: 'product', ean: '222', quantity: 1, checked: false };

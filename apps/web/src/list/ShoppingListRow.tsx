@@ -1,4 +1,4 @@
-import { type ListEntry, MAX_QUANTITY } from './shoppingList';
+import { type ListEntry, MAX_QUANTITY } from './listState';
 
 type ShoppingListRowProps = {
   entry: ListEntry;
