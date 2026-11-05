@@ -1,6 +1,6 @@
 # Plan: routing
 
-**Status:** PR 1 (data) merged (#26). PR 2 (engine) built and reviewed; PR 3 (web) after it.
+**Status:** PR 1 (data) merged (#26), PR 2 (engine) merged (#27), PR 3 (web) built.
 **A rough draft, not a source of truth**: the shortest route over a rough map. Where this file
 and the code disagree, the code wins.
 **Architecture refs:** §6 (generic entries, `CategoryPlacement`), §7 step 3 (shelf matching),
@@ -85,14 +85,26 @@ only, the split-map error and two-checkout tests; these docs.
 ## 4. Web (PR 3)
 
 - **Load** `graph.json`, `placements-primary.json`, `category-placements.json` and
-  `areas.json` like the search files (`?url`, content-hashed).
+  `areas.json` like the search files (`?url`, content-hashed), **once search is ready**:
+  233 KB gzipped would otherwise compete with tier 1 for the first-search target (§14).
 - **"Laske reitti"** computes the route from the list as it is then. Changing the list
-  afterwards does not move the route; pressing the button again does.
+  afterwards does not move the route; pressing the button again does. The page is worked
+  out from that snapshot and the data, so pressed early it shows "loading" and then the
+  route by itself.
+- **A failed load is retried** by pressing the button again. The message says so, and never
+  "reload the page": the list lives in memory only, so a reload would empty it.
 - **Route page:** numbered stops, each with its area name and its items with amounts; total
   metres and minutes; unplaced items listed; a "Takaisin" button. The list panel stays.
 - **A map error** (`planRoute` throws on a split map, §3) shows a message in place of the
-  route, never a blank or broken page.
+  route, never a blank or broken page. So do data still loading and data that failed to
+  load.
 - **No map yet.** Drawing the route is the step after this.
+
+**Built** in `apps/web/src/route/`: `loadRoutingData.ts` (fetch, index), `routeView.ts`
+(the route or a message; place names, distances, minutes), `useRoutingData.ts` (loads once
+enabled, retries on request), `RouteStopRow.tsx`, `RoutePage.tsx` (focuses its heading on
+opening), `route.css`; `App.tsx` connects the button. Place names come from the node id's area in `areas.json`; an area with no label
+and an entrance are named from the id ("Sisäänkäynti 1").
 
 ## 5. Decisions, for now
 
@@ -126,6 +138,20 @@ From the PR 2 review, not fixed yet:
   first stop, would close most of it; cheap at 42 places.
 - The test helpers `node` and `edge` are written out in both `dijkstra.test.ts` and
   `route.test.ts`.
+
+From the PR 3 review, not fixed yet:
+
+- **`MapAreas` is written twice**: in `apps/web/src/route/loadRoutingData.ts` and as the zod
+  type in `scraper/normalise/schema.ts`, which the web app can't import. Move it to
+  `packages/core` when the map view needs it too (a `types.ts` change, two reviewers).
+- **The same small test store** is written out in `loadRoutingData.test.ts` and
+  `routeView.test.ts`.
+- **Focus after "Takaisin"** drops to the page, as on the category page; it should go back
+  to the search bar.
+- **Place names alone can be ambiguous**: two checkout areas are both "Kassat", and
+  "Sisäänkäynti 2" means little in the store. The map view solves it.
+- **`apps/web/index.html` says `lang="en"`** on a Finnish app, so screen readers use an
+  English voice. Older than this PR; a one-line fix of its own.
 
 ## 7. Not now
 

@@ -646,7 +646,7 @@ fixed to the bottom of every page, search and category pages alike. Its heading,
 open it scrolls within half the screen. Items can be added, removed, and given an amount
 from 1 to 99 with a − / + stepper; adding something already on the list raises its amount
 instead of adding a second row. A "Laske reitti" button shows whether the list is open or
-closed, disabled while it is empty, and does nothing until routing (§9) exists. The state
+closed, disabled while it is empty, and opens the route page (§9, "Route page" below). The state
 is a plain `useReducer` in `App.tsx`, kept in memory only, so a reload empties the list.
 Reorder, check-off, Zustand and `localStorage` are still to come; Zustand when the map needs
 the list too.
@@ -673,6 +673,20 @@ Inline SVG in three layers: shelf polygons, route legs, markers.
 ### Trip summary
 
 Stop count, estimated distance, estimated time.
+
+### Route page — current state, a rough first version
+
+`apps/web/src/route/`. The routing data (about 230 KB gzipped) loads in the background once
+search is ready, so it never slows the first search (§14); if it fails, pressing "Laske
+reitti" again loads it again, since a reload would empty the list. "Laske reitti" plans the
+route for the list as it is then and shows it in place of search, with focus on its heading:
+the trip summary ("12 pysähdystä · 322 m · noin 9 min"), the entrance, the numbered stops
+in walking order, each with its area name from the store map, the walk from the previous
+stop and its items with amounts, then the checkout, and any items with no place. Data
+still loading, data that failed to load and a map error each show a message instead; the
+loading message turns into the route by itself when the data lands. Editing the list
+afterwards does not change the route; pressing the button again does.
+**No map yet**: the map view above is the next step. Plan: `docs/plans/routing.md` §4.
 
 ### Offline
 
@@ -834,13 +848,14 @@ Monday. This outranks every checkbox below.
 ### Track F — Frontend
 
 - [ ] App shell, mobile layout, navigation
-- [x] List builder, rough version: a closable panel at the bottom of every page; add, remove, amount per item, a "Laske reitti" button not wired to anything yet; in memory only (§11)
+- [x] List builder, rough version: a closable panel at the bottom of every page; add, remove, amount per item; "Laske reitti" opens the route page; in memory only (§11)
+- [x] Route page, rough version: numbered stops with area names and items, entrance and checkout, unplaced items, messages for loading and map errors; no map yet (§11)
 - [ ] List builder, the rest: reorder, check off; Zustand + `localStorage`
 - [ ] SVG map: shelf polygons, route legs, numbered pins
 - [ ] Three path states; animated current leg
 - [ ] Auto-zoom to current leg, full-route toggle
 - [ ] Check-off advances the map
-- [ ] Trip summary: stops, distance, time
+- [x] Trip summary: stops, distance, time _(on the route page; minutes rough, at 1 m/s plus 20 s per stop)_
 - [ ] Route-mode toggle (TSP / serpentine)
 - [ ] URL-encoded list sharing
 - [ ] Saved and recurring lists
