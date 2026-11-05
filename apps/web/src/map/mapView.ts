@@ -1,59 +1,52 @@
-// The store map's geometry, worked out without React: what part of the store to show, how
-// to draw the route's legs, and when names fit (docs/plans/route-map.md). Metres throughout,
-// origin top-left, y down (types.ts).
-import type { Route } from '@pathfinder/core';
-import type { MapAreas } from '../route/loadRoutingData';
+// The store map's view, worked out without React: what part of the store to show at what
+// size, how to draw the route's legs, and when names fit (docs/plans/route-map.md). Metres
+// throughout, origin top-left, y down (types.ts). Plain geometry lives in core (§17).
+import { boundsOf, fitView, type Route, type ViewBox } from '@pathfinder/core';
+
+// The map's geometry from one place, for the map components.
+export { boundsOf, fitView, pathData, type ViewBox } from '@pathfinder/core';
 
 type Point = readonly [number, number];
 
-/** A rectangle of the store, in metres: what an SVG `viewBox` shows. */
-export type ViewBox = { x: number; y: number; width: number; height: number };
+/** Space kept round what the map fits on screen, in metres. */
+export const PADDING_M = 4;
 
-/** The smallest box holding every point; a single point gives a box of size 0. */
-export function boundsOf(points: readonly Point[]): ViewBox {
-  if (points.length === 0) return { x: 0, y: 0, width: 0, height: 0 };
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  for (const [x, y] of points) {
-    minX = Math.min(minX, x);
-    minY = Math.min(minY, y);
-    maxX = Math.max(maxX, x);
-    maxY = Math.max(maxY, y);
-  }
-  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
-}
-
-/** The whole store: every area's outline and every entrance. */
-export function storeBounds(areas: MapAreas): ViewBox {
-  return boundsOf([
-    ...areas.areas.flatMap((area) => area.polygon),
-    ...areas.entrances.map((entrance) => entrance.point),
-  ]);
-}
+/** A map's size on screen, in CSS pixels. */
+export type ScreenSize = { width: number; height: number };
 
 /**
- * The view that shows `target` with `padding` metres round it, widened to the screen's
- * `aspect` (width ÷ height) so nothing is stretched, centred on the target. Never smaller
- * than `minSize` metres across, so a leg of a few metres does not fill the screen.
+ * What a map of `size` shows to fit `focus`, and how many screen pixels a metre is: the
+ * number that keeps nodes, numbers and names the same size on screen at any zoom. Null until
+ * the map has been measured, or while it has no width or height.
  */
-export function fitView(target: ViewBox, aspect: number, padding: number, minSize = 20): ViewBox {
-  let width = Math.max(target.width + 2 * padding, minSize);
-  let height = Math.max(target.height + 2 * padding, minSize);
-  if (width / height < aspect) width = height * aspect;
-  else height = width / aspect;
-  return {
-    x: target.x + target.width / 2 - width / 2,
-    y: target.y + target.height / 2 - height / 2,
-    width,
-    height,
-  };
+export function screenView(
+  focus: ViewBox,
+  size: ScreenSize | null,
+  padding = PADDING_M,
+): { view: ViewBox; pixelsPerMetre: number } | null {
+  if (size === null || size.width <= 0 || size.height <= 0) return null;
+  const view = fitView(focus, size.width / size.height, padding);
+  return { view, pixelsPerMetre: size.width / view.width };
 }
 
 /** Every leg of a route as points: one per stop, then the walk to the checkout. */
 export function legsOf(route: Route): Point[][] {
   return [...route.stops.map((stop) => stop.leg), route.end.leg];
+}
+
+const focusCache = new WeakMap<Route, ViewBox>();
+
+/**
+ * The box holding a whole route, what the overview fits on screen. The same object for the
+ * same route, so a memoised map is not redrawn when nothing changed.
+ */
+export function routeFocus(route: Route): ViewBox {
+  let focus = focusCache.get(route);
+  if (focus === undefined) {
+    focus = boundsOf(legsOf(route).flat());
+    focusCache.set(route, focus);
+  }
+  return focus;
 }
 
 /**
@@ -69,13 +62,28 @@ export function legStates(legCount: number, current: number): LegState[] {
   );
 }
 
-/** An SVG path through the points: "M x y L x y …". */
-export function pathData(points: readonly Point[]): string {
-  return points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x} ${y}`).join(' ');
+const DRAW_RANK: Record<LegState, number> = { ahead: 0, walked: 1, next: 2 };
+
+/**
+ * The legs' indexes in the order to draw them: ahead first, then walked, then next, so the
+ * next leg is never hidden under another. Legs of one state keep their route order.
+ */
+export function drawOrder(states: readonly LegState[]): number[] {
+  return states
+    .map((state, index) => ({ state, index }))
+    .sort((a, b) => DRAW_RANK[a.state] - DRAW_RANK[b.state] || a.index - b.index)
+    .map(({ index }) => index);
 }
 
-/** Names are hidden while a metre is fewer screen pixels than this: they would overlap. */
+/**
+ * Names are hidden while a metre is fewer screen pixels than this. A rough line: on the real
+ * map a few neighbouring names still touch just above it (docs/plans/route-map.md §6).
+ */
 export const LABEL_MIN_PIXELS_PER_METRE = 7;
+
+export function showsLabels(pixelsPerMetre: number): boolean {
+  return pixelsPerMetre >= LABEL_MIN_PIXELS_PER_METRE;
+}
 
 /** A long map label cut to its first part: "Lihat, broilerit, kananmunat" → "Lihat…". */
 export function shortLabel(label: string, maxLength = 18): string {

@@ -1,72 +1,39 @@
 import type { Route } from '@pathfinder/core';
 import { describe, expect, it } from 'vitest';
-import type { MapAreas } from '../route/loadRoutingData';
 import {
-  boundsOf,
-  fitView,
+  drawOrder,
+  LABEL_MIN_PIXELS_PER_METRE,
   labelPoint,
   legsOf,
   legStates,
-  pathData,
+  routeFocus,
+  screenView,
   shortLabel,
-  storeBounds,
+  showsLabels,
 } from './mapView';
 
-describe('boundsOf', () => {
-  it('gives the smallest box holding every point', () => {
-    expect(
-      boundsOf([
-        [2, 5],
-        [10, 1],
-        [4, 9],
-      ]),
-    ).toEqual({ x: 2, y: 1, width: 8, height: 8 });
+describe('screenView', () => {
+  const focus = { x: 10, y: 10, width: 40, height: 20 };
+
+  it('fits the focus to a phone-shaped map, and measures a metre in screen pixels', () => {
+    // 40 × 20 plus 4 m padding is 48 × 28; on a 360 × 480 map that becomes 48 × 64.
+    const shown = screenView(focus, { width: 360, height: 480 })!;
+    expect(shown.view.width).toBe(48);
+    expect(shown.view.height).toBe(64);
+    expect(shown.pixelsPerMetre).toBe(7.5);
   });
 
-  it('is a box of size 0 for one point, and at the origin for none', () => {
-    expect(boundsOf([[3, 4]])).toEqual({ x: 3, y: 4, width: 0, height: 0 });
-    expect(boundsOf([])).toEqual({ x: 0, y: 0, width: 0, height: 0 });
-  });
-});
-
-describe('storeBounds', () => {
-  it('covers every area and every entrance', () => {
-    const areas: MapAreas = {
-      entrances: [{ id: 'sisäänkäynti-1', point: [120, 20] }],
-      areas: [
-        {
-          id: 'a',
-          kind: 'goods',
-          polygon: [
-            [0, 0],
-            [10, 0],
-            [10, 50],
-          ],
-        },
-      ],
-    };
-    expect(storeBounds(areas)).toEqual({ x: 0, y: 0, width: 120, height: 50 });
-  });
-});
-
-describe('fitView', () => {
-  it('pads the target and widens it to the screen shape, centred', () => {
-    // 40 × 20 plus 5 m each side is 50 × 30; on a 2:1 screen that becomes 60 × 30.
-    const view = fitView({ x: 10, y: 10, width: 40, height: 20 }, 2, 5);
-    expect(view).toEqual({ x: 0, y: 5, width: 60, height: 30 });
+  it('uses the width, not the height, for a landscape map too', () => {
+    // 48 × 28 on a 600 × 200 map becomes 84 × 28: 600 px over 84 m.
+    const shown = screenView(focus, { width: 600, height: 200 })!;
+    expect(shown.view.width).toBe(84);
+    expect(shown.pixelsPerMetre).toBeCloseTo(600 / 84);
   });
 
-  it('makes it taller instead for a tall screen', () => {
-    // 50 × 30 on a 1:2 (portrait) screen becomes 50 × 100.
-    const view = fitView({ x: 10, y: 10, width: 40, height: 20 }, 0.5, 5);
-    expect(view.width).toBe(50);
-    expect(view.height).toBe(100);
-    expect(view.y + view.height / 2).toBe(20);
-  });
-
-  it('never zooms in closer than the smallest size', () => {
-    const view = fitView({ x: 5, y: 5, width: 0, height: 0 }, 1, 2, 20);
-    expect(view).toEqual({ x: -5, y: -5, width: 20, height: 20 });
+  it('is null until the map is measured, or while it has no size', () => {
+    expect(screenView(focus, null)).toBeNull();
+    expect(screenView(focus, { width: 360, height: 0 })).toBeNull();
+    expect(screenView(focus, { width: 0, height: 480 })).toBeNull();
   });
 });
 
@@ -101,6 +68,13 @@ describe('legs', () => {
     estimatedMinutes: 1,
   } satisfies Route;
 
+  it('frames the whole route, and gives the same object for the same route', () => {
+    expect(routeFocus(route)).toEqual({ x: 0, y: 0, width: 5, height: 5 });
+    // Same object: a memoised map is not redrawn when nothing changed.
+    expect(routeFocus(route)).toBe(routeFocus(route));
+    expect(routeFocus({ ...route })).not.toBe(routeFocus(route));
+  });
+
   it('lists one leg per stop, then the walk to the checkout', () => {
     expect(legsOf(route)).toEqual([
       [
@@ -122,19 +96,24 @@ describe('legs', () => {
     // At the checkout: everything walked.
     expect(legStates(4, 4)).toEqual(['walked', 'walked', 'walked', 'walked']);
   });
+});
 
-  it('draws a leg as an SVG path', () => {
-    expect(
-      pathData([
-        [0, 0],
-        [0, 5.5],
-        [3, 5.5],
-      ]),
-    ).toBe('M0 0 L0 5.5 L3 5.5');
+describe('drawOrder', () => {
+  it('draws legs ahead first, then walked, then the next one last, on top', () => {
+    expect(drawOrder(['walked', 'next', 'ahead', 'ahead'])).toEqual([2, 3, 0, 1]);
+    expect(drawOrder(['next', 'ahead'])).toEqual([1, 0]);
   });
 });
 
 describe('labels', () => {
+  it('shows names from 7 screen pixels per metre, not below', () => {
+    expect(LABEL_MIN_PIXELS_PER_METRE).toBe(7);
+    expect(showsLabels(6.99)).toBe(false);
+    expect(showsLabels(7)).toBe(true);
+    // A whole store on a phone is about 3.4 px/m: no names.
+    expect(showsLabels(3.4)).toBe(false);
+  });
+
   it('keeps a short label, and cuts a long one to its first part', () => {
     expect(shortLabel('Maitokaappi')).toBe('Maitokaappi');
     expect(shortLabel('Lihat, broilerit, kananmunat')).toBe('Lihat…');
