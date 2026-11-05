@@ -629,6 +629,14 @@ Client-side search keeps everything working offline.
 Add, remove, reorder, check off. Saved and recurring lists in `localStorage`.
 **Share via link:** list state encoded into the URL, decoded on load. No accounts.
 
+**Current state — a rough first version** (`apps/web/src/list/`). The list sits below the
+search results. Items can be added, removed, and given an amount from 1 to 99 with a − / +
+stepper; adding something already on the list raises its amount instead of adding a second
+row. A "Laske reitti" button sits under the list, disabled while it is empty, and does
+nothing until routing (§9) exists. The state is a plain `useReducer` in `App.tsx`, kept in
+memory only, so a reload empties the list. Reorder, check-off, Zustand and `localStorage`
+are still to come; Zustand when the map needs the list too.
+
 ### Route mode
 
 Default optimised (TSP). Toggle for aisle-order (serpentine), used as the report
@@ -811,7 +819,8 @@ Monday. This outranks every checkbox below.
 ### Track F — Frontend
 
 - [ ] App shell, mobile layout, navigation
-- [ ] List builder: add, remove, reorder, check off; Zustand + `localStorage`
+- [x] List builder, rough version: add, remove, amount per item, a "Laske reitti" button not wired to anything yet; in memory only (§11)
+- [ ] List builder, the rest: reorder, check off; Zustand + `localStorage`
 - [ ] SVG map: shelf polygons, route legs, numbered pins
 - [ ] Three path states; animated current leg
 - [ ] Auto-zoom to current leg, full-route toggle
