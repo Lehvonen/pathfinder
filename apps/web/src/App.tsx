@@ -1,24 +1,27 @@
 import type { Category, ListItem } from '@pathfinder/core';
 import type { ProductHit } from '@pathfinder/search';
-import { useState } from 'react';
+import { useReducer, useState } from 'react';
+import ShoppingList from './list/ShoppingList';
+import { listReducer } from './list/listState';
 import CategoryPage from './search/CategoryPage';
 import SearchBar from './search/SearchBar';
 import SearchResults from './search/SearchResults';
 import { useSearch } from './search/useSearch';
 import { useSearchEngine } from './search/useSearchEngine';
 import './search/search.css';
+import './list/list.css';
 
 function App() {
   const { engine, version, error } = useSearchEngine();
   const search = useSearch(engine, version);
   const [browsing, setBrowsing] = useState<Category | null>(null);
-  // Stand-in for the list builder (Track F): keeps the list items and confirms each add.
-  const [list, setList] = useState<ListItem[]>([]);
+  // Kept in memory only for now: the list is empty again after a reload.
+  const [list, dispatch] = useReducer(listReducer, []);
   const [lastAdded, setLastAdded] = useState('');
 
-  const add = (item: ListItem, shown: string) => {
-    setList((items) => [...items, item]);
-    setLastAdded(shown);
+  const add = (item: ListItem, name: string) => {
+    dispatch({ type: 'add', item, name });
+    setLastAdded(name);
   };
   const addProduct = (product: ProductHit) =>
     add(
@@ -35,7 +38,7 @@ function App() {
         quantity: 1,
         checked: false,
       },
-      `"${label}"`,
+      `"${label}" (${category.name})`,
     );
 
   return (
@@ -66,8 +69,17 @@ function App() {
         </>
       )}
       <p className="search-note" aria-live="polite">
-        {lastAdded && `Lisätty listalle: ${lastAdded} (${list.length} kpl)`}
+        {lastAdded && `Lisätty listalle: ${lastAdded}`}
       </p>
+      {!browsing && (
+        <ShoppingList
+          list={list}
+          onSetQuantity={(id, quantity) => dispatch({ type: 'setQuantity', id, quantity })}
+          onRemove={(id) => dispatch({ type: 'remove', id })}
+          // Routing is not built yet; the button is there so the flow can be tried.
+          onCalculateRoute={() => {}}
+        />
+      )}
     </main>
   );
 }
