@@ -1,4 +1,4 @@
-import type { Category, Placement, Product } from '@pathfinder/core';
+import type { Category, Graph, Placement, Product } from '@pathfinder/core';
 import { readFileSync } from 'node:fs';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import type { z } from 'zod';
@@ -9,11 +9,13 @@ import {
   categoryOverridesSchema,
   categorySchema,
   curatedDepartmentsSchema,
+  graphSchema,
   mapAreasSchema,
   placementSchema,
   popularitySchema,
   productSchema,
   validateDepartmentAreas,
+  validateGraph,
   validateMapAreas,
   validateNormalised,
   type DepartmentSeen,
@@ -33,6 +35,7 @@ describe('schema types', () => {
     expectTypeOf<z.infer<typeof placementSchema>>().toEqualTypeOf<Placement>();
     expectTypeOf<z.infer<typeof categorySchema>>().toEqualTypeOf<Category>();
     expectTypeOf<z.infer<typeof curatedDepartmentsSchema>>().toEqualTypeOf<CuratedDepartment[]>();
+    expectTypeOf<z.infer<typeof graphSchema>>().toEqualTypeOf<Graph>();
   });
 });
 
@@ -205,6 +208,83 @@ describe('validateDepartmentAreas', () => {
     const rows = readData('data/curation/department-areas.json');
     const areaIds = new Set(map.areas.map((area) => area.id));
     expect(validateDepartmentAreas(rows, departments, areaIds)).toEqual([]);
+  });
+});
+
+describe('validateGraph', () => {
+  const milk = { id: '91208', name: '(MAITO) Maidot', products: 99 };
+  const square = [
+    [0, 0],
+    [4, 0],
+    [4, 4],
+  ];
+  const graph = () => ({
+    note: 'Rough first draft.',
+    version: 1,
+    nodes: [
+      { id: 'sisäänkäynti-1:0', x: 10, y: 0, kind: 'entrance' },
+      { id: 'käytävä:1', x: 5, y: 0, kind: 'junction' },
+      { id: 'maitokaappi:0', x: 5, y: 3, kind: 'shelf-access' },
+      { id: 'kassat-1:0', x: 8, y: 3, kind: 'checkout' },
+    ],
+    edges: [
+      { from: 'sisäänkäynti-1:0', to: 'käytävä:1', weight: 5 },
+      { from: 'käytävä:1', to: 'maitokaappi:0', weight: 3 },
+      { from: 'käytävä:1', to: 'kassat-1:0', weight: 4.2 },
+    ],
+    shelves: [{ id: '91208:00', accessNodeId: 'maitokaappi:0', polygon: square }],
+  });
+
+  it('accepts a connected graph with a department-wide shelf for every department', () => {
+    expect(validateGraph(graph(), [milk, { ...milk, id: '1', products: 0 }])).toEqual([]);
+  });
+
+  it.each([
+    ['no note', { ...graph(), note: undefined }],
+    ['a field outside the contract', { ...graph(), scale: 0.22 }],
+    ['a zero weight', { ...graph(), edges: [{ ...graph().edges[0], weight: 0 }] }],
+    ['an unknown node kind', { ...graph(), nodes: [{ ...graph().nodes[0], kind: 'door' }] }],
+    [
+      'a shelf id that is not <departmentId>:<shelf>',
+      { ...graph(), shelves: [{ ...graph().shelves[0], id: '91208' }] },
+    ],
+  ])('rejects a graph with %s', (_, bad) => {
+    expect(validateGraph(bad, [milk])).not.toEqual([]);
+  });
+
+  it('rejects broken references, duplicates and a missing entrance or checkout', () => {
+    const g = graph();
+    g.nodes = [...g.nodes.filter((node) => node.kind !== 'checkout'), g.nodes[1]!];
+    g.edges = [...g.edges, { from: 'käytävä:1', to: 'sisäänkäynti-1:0', weight: 5 }];
+    g.shelves = [...g.shelves, { id: '91208:00', accessNodeId: 'kala:0', polygon: square }];
+    expect(validateGraph(g, [milk])).toEqual([
+      'node käytävä:1: duplicate id',
+      'edge käytävä:1 → kassat-1:0: no such node kassat-1:0',
+      'edge käytävä:1 → sisäänkäynti-1:0: duplicate edge',
+      'shelf 91208:00: duplicate id',
+      'shelf 91208:00: no such node kala:0',
+      'graph: no checkout node',
+    ]);
+  });
+
+  it('rejects a node that cannot be reached from the entrance', () => {
+    const g = graph();
+    g.edges = g.edges.filter((edge) => edge.to !== 'kassat-1:0');
+    expect(validateGraph(g, [milk])).toEqual([
+      'graph: 1 nodes unreachable from sisäänkäynti-1:0: kassat-1:0',
+    ]);
+  });
+
+  it('names a department with products but no department-wide shelf', () => {
+    const bread = { id: '613', name: '(LEIPÄ) Leipähyllykalusteet', products: 315 };
+    expect(validateGraph(graph(), [milk, bread])).toEqual([
+      'department 613 ((LEIPÄ) Leipähyllykalusteet): no shelf 613:00 for its 315 products',
+    ]);
+  });
+
+  it('accepts the committed data/graph/department-level.json', () => {
+    const departments = readData('data/normalised/departments.json') as DepartmentSeen[];
+    expect(validateGraph(readData('data/graph/department-level.json'), departments)).toEqual([]);
   });
 });
 

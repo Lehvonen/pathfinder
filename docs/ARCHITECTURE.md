@@ -737,7 +737,7 @@ Monday. This outranks every checkbox below.
 
 ### Track C — The map
 
-- [ ] **Department-level graph, week 1**: ~20 nodes traced from a photo of the store's own directory sign. One hour. This is what unblocks Tracks D, E and F
+- [x] **Department-level graph, week 1**: ~20 nodes traced from a photo of the store's own directory sign. One hour. This is what unblocks Tracks D, E and F — done as a rough draft from the store's own map, `data/graph/department-level.json` (`docs/plans/map.md` §5)
 - [ ] Editor: click to place nodes, drag to connect, assign shelf IDs, export JSON — **rough version by end of week 2**, polish never
 - [ ] Editor autosave to `localStorage` on every change, plus undo _(ready when: editor renders — do this before any bulk tracing session)_
 - [ ] Editor exports **one section at a time** to `data/graph/`, merged at build time; several people map in parallel without conflicts
@@ -752,6 +752,7 @@ Monday. This outranks every checkbox below.
 ### Track D — Routing
 
 - [ ] Dijkstra; all-pairs matrix over only the nodes a list touches
+- [ ] Access and checkout nodes are dead ends: a leg may start or end at one but never pass through it, since a block's centre node joins the aisles on its sides (`docs/plans/map.md` §5)
 - [ ] Naive in-order routing, good enough for the first store run
 - [ ] Held-Karp (≤15 stops) and nearest-neighbour + 2-opt (>15)
 - [ ] Serpentine baseline — the report's comparison number

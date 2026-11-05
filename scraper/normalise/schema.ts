@@ -22,6 +22,7 @@ export const temperatureSchema = z.enum(['ambient', 'chilled', 'frozen']);
 
 const ean = z.string().refine(isValidEan, 'not an EAN');
 const id = z.number().int().positive();
+const shelfId = z.string().regex(/^[^:]+:[^:]+$/, 'not <departmentId>:<shelf>');
 
 export const productSchema = z.strictObject({
   ean,
@@ -32,7 +33,7 @@ export const productSchema = z.strictObject({
 
 export const placementSchema = z.strictObject({
   ean,
-  shelfId: z.string().regex(/^[^:]+:[^:]+$/, 'not <departmentId>:<shelf>'),
+  shelfId,
   shelfLevel: z.number().int().positive().optional(),
   isPrimary: z.boolean(),
 });
@@ -190,6 +191,119 @@ export function validateDepartmentAreas(
     if (department.products > 0 && !mapped.has(department.id)) {
       errors.push(
         `department ${department.id} (${department.name}): no area for its ${department.products} products`,
+      );
+    }
+  }
+  return errors;
+}
+
+// ── Walk graph (data/graph/department-level.json) ────────────
+
+export const graphNodeSchema = z.strictObject({
+  id: z.string().min(1),
+  x: z.number().nonnegative(),
+  y: z.number().nonnegative(),
+  kind: z.enum(['shelf-access', 'junction', 'aisle-end', 'entrance', 'checkout']),
+  aisle: z.number().int().positive().optional(),
+});
+
+export const edgeSchema = z.strictObject({
+  from: z.string().min(1),
+  to: z.string().min(1),
+  weight: z.number().positive(),
+});
+
+export const shelfSchema = z.strictObject({
+  id: shelfId,
+  accessNodeId: z.string().min(1),
+  polygon: z.array(point).min(3),
+});
+
+export const graphSchema = z.strictObject({
+  version: z.literal(1),
+  nodes: z.array(graphNodeSchema),
+  edges: z.array(edgeSchema),
+  shelves: z.array(shelfSchema),
+});
+
+/** A graph source file: the contract's `Graph`, plus a note on how far to trust it. */
+export const graphSourceSchema = graphSchema.extend({ note: z.string().min(1) });
+
+/** The nodes reachable from `start`, walking edges both ways (types.ts, `Edge`). */
+function reachable(start: string, edges: { from: string; to: string }[]): Set<string> {
+  const next = new Map<string, string[]>();
+  for (const { from, to } of edges) {
+    next.set(from, [...(next.get(from) ?? []), to]);
+    next.set(to, [...(next.get(to) ?? []), from]);
+  }
+  const seen = new Set([start]);
+  const queue = [start];
+  for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
+    for (const neighbour of next.get(id) ?? []) {
+      if (!seen.has(neighbour)) {
+        seen.add(neighbour);
+        queue.push(neighbour);
+      }
+    }
+  }
+  return seen;
+}
+
+/**
+ * Every problem in a walk-graph source file, one line each. Empty means it is valid.
+ * Besides the references, every node must be reachable from an entrance, and every
+ * department with products needs its department-wide shelf `<id>:00`, so that each of
+ * its products can be routed (docs/plans/map.md §5).
+ */
+export function validateGraph(data: unknown, departments: DepartmentSeen[]): string[] {
+  const result = graphSourceSchema.safeParse(data);
+  if (!result.success) return issueLines('graph', result.error);
+  const { nodes, edges, shelves } = result.data;
+  const errors: string[] = [];
+
+  const nodeIds = new Set<string>();
+  for (const node of nodes) {
+    if (nodeIds.has(node.id)) errors.push(`node ${node.id}: duplicate id`);
+    nodeIds.add(node.id);
+  }
+  const pairs = new Set<string>();
+  for (const { from, to } of edges) {
+    const prefix = `edge ${from} → ${to}:`;
+    for (const end of [from, to]) {
+      if (!nodeIds.has(end)) errors.push(`${prefix} no such node ${end}`);
+    }
+    if (from === to) errors.push(`${prefix} joins a node to itself`);
+    const pair = [from, to].sort().join('\n');
+    if (pairs.has(pair)) errors.push(`${prefix} duplicate edge`);
+    pairs.add(pair);
+  }
+  const shelfIds = new Set<string>();
+  for (const shelf of shelves) {
+    if (shelfIds.has(shelf.id)) errors.push(`shelf ${shelf.id}: duplicate id`);
+    shelfIds.add(shelf.id);
+    if (!nodeIds.has(shelf.accessNodeId)) {
+      errors.push(`shelf ${shelf.id}: no such node ${shelf.accessNodeId}`);
+    }
+  }
+
+  for (const kind of ['entrance', 'checkout'] as const) {
+    if (!nodes.some((node) => node.kind === kind)) errors.push(`graph: no ${kind} node`);
+  }
+  const entrance = nodes.find((node) => node.kind === 'entrance');
+  if (entrance) {
+    const seen = reachable(entrance.id, edges);
+    const stranded = nodes.filter((node) => !seen.has(node.id)).map((node) => node.id);
+    if (stranded.length > 0) {
+      errors.push(
+        `graph: ${stranded.length} nodes unreachable from ${entrance.id}: ${stranded.join(', ')}`,
+      );
+    }
+  }
+
+  for (const department of departments) {
+    if (department.products > 0 && !shelfIds.has(`${department.id}:00`)) {
+      errors.push(
+        `department ${department.id} (${department.name}): no shelf ${department.id}:00 for its ${department.products} products`,
       );
     }
   }

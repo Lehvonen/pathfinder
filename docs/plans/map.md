@@ -17,7 +17,7 @@ L-shaped polygon.
 
 ## 2. `data/graph/areas.json`
 
-54 areas: 50 where goods are sold, 3 checkout areas (two Kassat, Itsepalvelukassat) and the
+52 areas: 48 where goods are sold, 3 checkout areas (two Kassat, Itsepalvelukassat) and the
 Kahvila. The `id` is the map label in lowercase kebab-case, with å, ä and ö kept as they are; a label printed twice
 (Jalkineet, Sesonki, Kassat) gets `-1` and `-2`, top to bottom. The two dry-goods blocks
 are labelled on the map with a list of contents, not a name; their ids are `kuivaruoat` and
@@ -92,10 +92,54 @@ Areas with no department yet: `jalkineet-1`, `jalkineet-2`, `laukut`, `irtomakei
 and `itsepalvelukassat`. The scrape has no department named for the first six; their
 products are probably filed under a neighbour (bags and shoes under 551, juices under 583).
 
-## 5. Check on the store visit
+## 5. `data/graph/department-level.json` — the walk graph
+
+**A rough first draft, not a source of truth.** Its job is that every product can be routed
+now, so the router and the app have a real store to work against. The file says so in its
+`note` field. It is replaced section by section once the map editor exists (§8).
+
+- **Aisles** run along the gaps between the map's blocks: a front aisle under the clothes,
+  the main cross-corridor, one between the dry-goods blocks and the chilled rows, a back
+  aisle along Palvelutiski and Maitokaappi, and the vertical aisles between the columns,
+  including the chilled rows' own. 128 junctions where aisles cross or end, or where an
+  area links in.
+- **One access node per area** (`<area>:0`, 51 of them, the Kahvila has none), linked to
+  the aisle along **every side of the area that is open**: an aisle runs alongside it,
+  outside it, at most 5 m away, for at least a metre. A side facing a neighbouring block
+  has no aisle that close and gets no link. An area against a wall is open on one side and
+  its node stands at that edge; a block in the middle of the store is open on two to four
+  sides and its node stands at its centre. The big dry-goods blocks and the chilled rows
+  are open on all four. A checkout area's node has kind `checkout`; the two entrances
+  (`<entrance>:0`) link to the nearest aisle end.
+- **A route never passes through an access node.** It may start or end at one, but a
+  block's centre node joins aisles on opposite sides, so walking through it would cut
+  through the shelves. The router (Track D) must treat access and checkout nodes as dead
+  ends unless they are the leg's start or end.
+- **One shelf per department**, `<department>:00`, 198 of them, each at its area's access
+  node and drawn with its area's outline. Every shelf of a department, `91208:05` as much
+  as `91208:00`, routes to that node: a placement whose shelf is not in the graph falls
+  back to its department-wide shelf. That keeps every product routable until shelves are
+  mapped one by one, and is the rule the shelf matching in `build-data.ts` will follow.
+- **Weights** are straight-line metres at the placeholder scale (§3), with one exception: an
+  access link weighs the walk from the aisle to the area's edge, not to its centre, so a
+  stop costs the same from any side. Paced weights replace them after the verification
+  walk.
+
+`validateGraph` (`scraper/normalise/schema.ts`) checks the file against the contract
+(`Graph` in types.ts, plus the `note`), every reference, that every node can be reached
+from an entrance, and that every department with products has its `:00` shelf.
+
+Known shortcuts:
+
+- The left pocket (Juusto, Juurekset, Leipä, Texmex, Paistopiste) is reached only from the
+  main cross-corridor. The map shows no way past the Kahvila to the back aisle.
+- A department in two areas, such as 551 Vapaa-aika ja pukeutuminen, routes to one of them.
+
+## 6. Check on the store visit
 
 - The unlabelled strip under Leipä: what is sold there
 - Which side of each block the shelves face, where the map does not show it
 - The two entrances: both are doors in, not one in and one out, and where exactly each
   door is along the right wall
 - Every `reviewed: false` row in §4
+- Whether the left pocket has a way through to the back aisle
