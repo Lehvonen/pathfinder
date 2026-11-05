@@ -648,8 +648,9 @@ from 1 to 99 with a − / + stepper; adding something already on the list raises
 instead of adding a second row. A "Laske reitti" button shows whether the list is open or
 closed, disabled while it is empty, and opens the route overview ("Route overview" below).
 The state is a plain `useReducer` in `App.tsx`, kept in memory only, so a reload empties
-the list. Items can be ticked and unticked (`setChecked`; any rise in amount unticks), for
-the shopping screen to come. Reorder, Zustand and `localStorage` are still to come; Zustand
+the list. Items are ticked on the shopping screen (`setChecked`; any rise in amount unticks); the
+panel and "Muokkaa listaa" show a ticked item struck through, with "✓ Kerätty" to untick it,
+since a ticked item is left out of the next route. Reorder, Zustand and `localStorage` are still to come; Zustand
 when the map needs the list too.
 
 ### Route mode
