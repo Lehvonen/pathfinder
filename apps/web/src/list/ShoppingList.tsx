@@ -6,6 +6,8 @@ type ShoppingListProps = {
   list: readonly ListEntry[];
   onSetQuantity(id: string, quantity: number): void;
   onRemove(id: string): void;
+  /** Unticks an item picked on the shopping screen (see ShoppingListRow). */
+  onUntick?(id: string): void;
   onCalculateRoute(): void;
 };
 
@@ -15,7 +17,8 @@ type ShoppingListProps = {
  * closes the rows; it starts closed, so the search results get the screen. "Laske reitti"
  * shows either way, disabled while the list is empty, since there is nothing to route.
  */
-function ShoppingList({ list, onSetQuantity, onRemove, onCalculateRoute }: ShoppingListProps) {
+function ShoppingList(props: ShoppingListProps) {
+  const { list, onSetQuantity, onRemove, onUntick, onCalculateRoute } = props;
   const [open, setOpen] = useState(false);
 
   return (
@@ -48,6 +51,7 @@ function ShoppingList({ list, onSetQuantity, onRemove, onCalculateRoute }: Shopp
                 entry={entry}
                 onSetQuantity={onSetQuantity}
                 onRemove={onRemove}
+                onUntick={onUntick}
               />
             ))}
           </ul>
