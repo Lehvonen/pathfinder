@@ -1,0 +1,63 @@
+import type { ListItem } from '@pathfinder/core';
+
+/**
+ * One row of the shopping list: the item, and the name it is shown by. A product
+ * `ListItem` holds only its EAN, so the name the shopper picked is kept beside it rather
+ * than looked up in the search data on every render.
+ */
+export type ListEntry = { item: ListItem; name: string };
+
+export type ListAction =
+  | { type: 'add'; item: ListItem; name: string }
+  | { type: 'remove'; id: string }
+  | { type: 'setQuantity'; id: string; quantity: number };
+
+/** The most of one item a list holds; the stepper stops here. */
+export const MAX_QUANTITY = 99;
+
+/** Whole numbers from 1 to MAX_QUANTITY; anything else is pulled into that range. */
+export function clampQuantity(quantity: number): number {
+  if (!Number.isFinite(quantity)) return 1;
+  return Math.min(MAX_QUANTITY, Math.max(1, Math.round(quantity)));
+}
+
+/** The same thing on the list: one product, or one generic word in one category. */
+function isSameThing(a: ListItem, b: ListItem): boolean {
+  if (a.kind === 'product' && b.kind === 'product') return a.ean === b.ean;
+  if (a.kind === 'generic' && b.kind === 'generic') {
+    return a.categoryId === b.categoryId && a.label === b.label;
+  }
+  return false;
+}
+
+function withQuantity(entry: ListEntry, quantity: number): ListEntry {
+  return { ...entry, item: { ...entry.item, quantity: clampQuantity(quantity) } };
+}
+
+/**
+ * The list's state changes, for `useReducer`. Adding something already on the list adds
+ * to its quantity instead of a second row. Quantity never drops below 1: taking an item
+ * off the list is `remove`.
+ */
+export function listReducer(list: readonly ListEntry[], action: ListAction): ListEntry[] {
+  switch (action.type) {
+    case 'add': {
+      const index = list.findIndex((entry) => isSameThing(entry.item, action.item));
+      if (index === -1) {
+        return [
+          ...list,
+          withQuantity({ item: action.item, name: action.name }, action.item.quantity),
+        ];
+      }
+      return list.map((entry, i) =>
+        i === index ? withQuantity(entry, entry.item.quantity + action.item.quantity) : entry,
+      );
+    }
+    case 'remove':
+      return list.filter((entry) => entry.item.id !== action.id);
+    case 'setQuantity':
+      return list.map((entry) =>
+        entry.item.id === action.id ? withQuantity(entry, action.quantity) : entry,
+      );
+  }
+}
