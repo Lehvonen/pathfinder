@@ -94,6 +94,16 @@ describe('planRoute', () => {
     expect(route.totalDistance).toBe(20);
   });
 
+  it('starts at the entrance asked for, even when the other is shorter', () => {
+    const { route } = planRoute([product('4')], data, { start: 'west' });
+    expect(route.start.nodeId).toBe('west');
+    expect(route.totalDistance).toBe(50);
+  });
+
+  it('throws for a start that is not an entrance', () => {
+    expect(() => planRoute([product('4')], data, { start: 'j1' })).toThrow('no entrance j1');
+  });
+
   it('numbers the stops 1..n, and puts items at the same node in one stop', () => {
     const one = product('1');
     const three = product('3');
@@ -201,6 +211,10 @@ describe('planRoute: a broken map', () => {
     expect(unplaced).toEqual([]);
     expect(route.start.nodeId).toBe('west');
     expect(route.totalDistance).toBe(60);
+    // Chosen on purpose, though, it is a map error, not a silent switch to another entrance.
+    expect(() =>
+      planRoute([product('1'), product('2')], looseEntrance, { start: 'loose' }),
+    ).toThrow('map error: no entrance reaches every stop');
   });
 
   it('throws a map error when two stops cannot reach each other, rather than drop one', () => {

@@ -122,3 +122,66 @@ describe('listReducer: setQuantity', () => {
     expect(quantities(before)).toEqual([1]);
   });
 });
+
+describe('listReducer: setChecked', () => {
+  const checked = (list: ListEntry[]) => list.map((entry) => entry.item.checked);
+
+  it('ticks and unticks only that item', () => {
+    const ticked = listReducer(listOf(milk, bread), { type: 'setChecked', id: 'b', checked: true });
+    expect(checked(ticked)).toEqual([false, true]);
+    const unticked = listReducer(ticked, { type: 'setChecked', id: 'b', checked: false });
+    expect(checked(unticked)).toEqual([false, false]);
+  });
+
+  it('keeps the amount and the name', () => {
+    const [entry] = listReducer(listOf({ ...milk, quantity: 3 }), {
+      type: 'setChecked',
+      id: 'a',
+      checked: true,
+    });
+    expect(entry).toEqual({ item: { ...milk, quantity: 3, checked: true }, name: 'a' });
+  });
+
+  it('unticks an item when more of it is added: there is more to pick up', () => {
+    const ticked = listReducer(listOf(milk), { type: 'setChecked', id: 'a', checked: true });
+    const added = listReducer(ticked, { type: 'add', item: { ...milk, id: 'a2' }, name: 'a' });
+    expect(checked(added)).toEqual([false]);
+    expect(quantities(added)).toEqual([2]);
+  });
+});
+
+describe('listReducer: clear', () => {
+  it('empties the list', () => {
+    expect(listReducer(listOf(milk, bread), { type: 'clear' })).toEqual([]);
+  });
+});
+
+describe('listReducer: quantity and ticks', () => {
+  const tickedMilk = () =>
+    listReducer(listOf(milk), { type: 'setChecked', id: 'a', checked: true });
+
+  it('unticks an item when the stepper raises its amount', () => {
+    const raised = listReducer(tickedMilk(), { type: 'setQuantity', id: 'a', quantity: 2 });
+    expect(raised[0]!.item).toMatchObject({ quantity: 2, checked: false });
+  });
+
+  it('keeps it ticked when the amount goes down or stays the same', () => {
+    const twoTicked = listReducer(
+      listReducer(listOf({ ...milk, quantity: 2 }), { type: 'setChecked', id: 'a', checked: true }),
+      { type: 'setQuantity', id: 'a', quantity: 1 },
+    );
+    expect(twoTicked[0]!.item).toMatchObject({ quantity: 1, checked: true });
+    const same = listReducer(tickedMilk(), { type: 'setQuantity', id: 'a', quantity: 1 });
+    expect(same[0]!.item.checked).toBe(true);
+    // At the cap, + changes nothing, so nothing is unticked either.
+    const capped = listReducer(
+      listReducer(listOf({ ...milk, quantity: MAX_QUANTITY }), {
+        type: 'setChecked',
+        id: 'a',
+        checked: true,
+      }),
+      { type: 'setQuantity', id: 'a', quantity: MAX_QUANTITY + 1 },
+    );
+    expect(capped[0]!.item.checked).toBe(true);
+  });
+});

@@ -1,0 +1,77 @@
+/* The store map: grey areas, names when zoomed in, the route in green. No outlines and no
+   other lines (docs/plans/route-map.md). Line widths stay the same on screen at any zoom. */
+
+.store-map {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #fafafa;
+  border-radius: 8px;
+}
+
+.store-map svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.store-map__area {
+  fill: #e4e4e4;
+}
+
+.store-map__area--checkout {
+  fill: #d6d6d6;
+}
+
+.store-map__area--other {
+  fill: #ececec;
+}
+
+.store-map__label {
+  fill: #666;
+  font-family: system-ui, sans-serif;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+/* ── The route ────────────────────────────────────────────── */
+
+.store-map__leg {
+  fill: none;
+  stroke-width: 6px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Walked and next share the deep green; what is still ahead is a light green. Solid, not
+   see-through: see-through legs that share an aisle would add up to a darker green. */
+.store-map__leg--walked,
+.store-map__leg--next {
+  stroke: #1b8a3c;
+}
+
+.store-map__leg--ahead {
+  stroke: #a9d3b5;
+}
+
+/* A stop: a circle a little wider than the line, so the line bulges there, with its number. */
+.store-map__node--walked,
+.store-map__node--next {
+  fill: #1b8a3c;
+}
+
+.store-map__node--ahead {
+  fill: #a9d3b5;
+}
+
+.store-map__number {
+  fill: #000;
+  font-family: system-ui, sans-serif;
+  font-weight: 700;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}

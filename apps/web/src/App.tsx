@@ -1,10 +1,11 @@
 import type { Category, ListItem } from '@pathfinder/core';
 import type { ProductHit } from '@pathfinder/search';
-import { useMemo, useReducer, useState } from 'react';
+import { useDeferredValue, useMemo, useReducer, useState } from 'react';
 import ShoppingList from './list/ShoppingList';
 import { listReducer, newItemId, type ListEntry } from './list/listState';
-import RoutePage from './route/RoutePage';
-import { routeViewFor } from './route/routeView';
+import ListEditPage from './route/ListEditPage';
+import RouteOverview from './route/RouteOverview';
+import { routeViewFor, shownRouteView } from './route/routeView';
 import { useRoutingData } from './route/useRoutingData';
 import CategoryPage from './search/CategoryPage';
 import SearchBar from './search/SearchBar';
@@ -14,6 +15,10 @@ import { useSearchEngine } from './search/useSearchEngine';
 import './search/search.css';
 import './list/list.css';
 import './route/route.css';
+import './map/map.css';
+
+/** Which screen is showing; search includes its category pages. */
+type Screen = 'search' | 'route' | 'edit';
 
 function App() {
   const { engine, version, error } = useSearchEngine();
@@ -28,20 +33,38 @@ function App() {
   // Kept in memory only for now: the list is empty again after a reload.
   const [list, dispatch] = useReducer(listReducer, []);
   const [lastAdded, setLastAdded] = useState('');
-  // The list as it was when "Laske reitti" was pressed; null shows search instead. The page
-  // is worked out from it and the routing data, so it turns from "loading" into the route
-  // by itself when the data lands, while later edits to the list leave it as it was.
+  const [screen, setScreen] = useState<Screen>('search');
+  // The entrance the shopper chose; null is the default, entrance 1.
+  const [start, setStart] = useState<string | null>(null);
+  // The list as it was when the route was planned. The route screen is worked out from it
+  // and the routing data, so it turns from "loading" into the route by itself when the data
+  // lands, while later edits to the list leave it as it was. Deferred, so the screen paints
+  // at once and the planning (from both entrances) happens straight after.
   const [routedList, setRoutedList] = useState<readonly ListEntry[] | null>(null);
+  const plannedList = useDeferredValue(routedList);
   const routeView = useMemo(
-    () => routedList && routeViewFor(routedList, routing, routingError),
-    [routedList, routing, routingError],
+    () => plannedList && routeViewFor(plannedList, routing, routingError),
+    [plannedList, routing, routingError],
   );
 
-  const calculateRoute = () => {
+  /** Plans the route for the list as it is now and shows it. */
+  const showRoute = () => {
     if (routingError !== null) retryRouting();
     setRoutedList(list);
+    setScreen('route');
     window.scrollTo(0, 0);
   };
+  const showScreen = (next: Screen) => {
+    setScreen(next);
+    window.scrollTo(0, 0);
+  };
+  const backFromEdit = () => {
+    if (list.length === 0) showScreen('search');
+    else showRoute();
+  };
+  const setQuantity = (id: string, quantity: number) =>
+    dispatch({ type: 'setQuantity', id, quantity });
+  const remove = (id: string) => dispatch({ type: 'remove', id });
 
   const add = (item: ListItem, name: string) => {
     dispatch({ type: 'add', item, name });
@@ -67,8 +90,23 @@ function App() {
 
   return (
     <main>
-      {routeView ? (
-        <RoutePage view={routeView} onBack={() => setRoutedList(null)} />
+      {screen === 'route' ? (
+        <RouteOverview
+          view={shownRouteView(routeView, plannedList, routedList)}
+          start={start}
+          onChangeStart={setStart}
+          onEditList={() => showScreen('edit')}
+          onBack={() => showScreen('search')}
+          onRetry={retryRouting}
+        />
+      ) : screen === 'edit' ? (
+        <ListEditPage
+          list={list}
+          onSetQuantity={setQuantity}
+          onRemove={remove}
+          onAddMore={() => showScreen('search')}
+          onBack={backFromEdit}
+        />
       ) : browsing && engine ? (
         <CategoryPage
           key={browsing.id}
@@ -94,16 +132,20 @@ function App() {
           />
         </>
       )}
-      <p className="search-note" aria-live="polite">
-        {lastAdded && `Lisätty listalle: ${lastAdded}`}
-      </p>
-      {/* On every page, and always mounted, so it stays open or closed across pages. */}
-      <ShoppingList
-        list={list}
-        onSetQuantity={(id, quantity) => dispatch({ type: 'setQuantity', id, quantity })}
-        onRemove={(id) => dispatch({ type: 'remove', id })}
-        onCalculateRoute={calculateRoute}
-      />
+      {screen === 'search' && (
+        <>
+          <p className="search-note" aria-live="polite">
+            {lastAdded && `Lisätty listalle: ${lastAdded}`}
+          </p>
+          {/* Only on search: the route screens replace it (docs/plans/route-map.md). */}
+          <ShoppingList
+            list={list}
+            onSetQuantity={setQuantity}
+            onRemove={remove}
+            onCalculateRoute={showRoute}
+          />
+        </>
+      )}
     </main>
   );
 }

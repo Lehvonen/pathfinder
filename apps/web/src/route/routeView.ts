@@ -1,51 +1,101 @@
-// What the route page shows, worked out without React: the route or a message, and the
-// words for places, distances and times (docs/plans/routing.md §4).
-import { planRoute, type ListItem, type RouteResult } from '@pathfinder/core';
+// What the route screens show, worked out without React: the route from each entrance or a
+// message, and the words for places, distances and times (docs/plans/route-map.md).
+import { compareStrings, planRoute, type ListItem, type RouteResult } from '@pathfinder/core';
 import type { ListEntry } from '../list/listState';
 import type { LoadedRouting, MapAreas } from './loadRoutingData';
 
 /**
- * The route page's content: a planned route, with each item's name and the map to name
- * places from, or a message instead.
+ * The route screens' content: the route planned from every entrance, so switching where to
+ * start is instant, with each item's name and the map to name places from; or a message,
+ * with whether trying again could help.
  */
 export type RouteView =
-  | { kind: 'route'; result: RouteResult; names: ReadonlyMap<string, string>; areas: MapAreas }
-  | { kind: 'message'; text: string };
+  | {
+      kind: 'route';
+      /** In id order: the first, "sisäänkäynti-1", is where a route starts by default. */
+      entrances: readonly string[];
+      byEntrance: ReadonlyMap<string, RouteResult>;
+      names: ReadonlyMap<string, string>;
+      areas: MapAreas;
+    }
+  | { kind: 'message'; text: string; canRetry: boolean };
 
 export const MESSAGES = {
-  loading: 'Reittitiedot latautuvat vielä. Yritä hetken päästä uudelleen.',
+  loading: 'Reittitiedot latautuvat vielä. Hetki…',
   // Not "reload the page": the list lives in memory only, so a reload would empty it.
-  // Pressing the button again loads the data again (useRoutingData's retry).
-  loadFailed: 'Reittitiedot eivät latautuneet. Tarkista yhteys ja paina Laske reitti uudelleen.',
+  // "Yritä uudelleen" loads the data again (useRoutingData's retry).
+  loadFailed: 'Reittitiedot eivät latautuneet. Tarkista yhteys ja paina Yritä uudelleen.',
   mapError: 'Reittiä ei voitu laskea: kaupan kartassa on virhe.',
+  calculating: 'Lasketaan reittiä…',
 } as const;
 
+/** Shown for the moment between pressing the button and the route being planned. */
+export const CALCULATING: RouteView = {
+  kind: 'message',
+  text: MESSAGES.calculating,
+  canRetry: false,
+};
+
 /**
- * Plans the route for the list as it is now. Never throws: data still loading, data that
- * failed to load and a map error (`planRoute` on a split map) each become a message.
+ * What the route screen shows: the planned view once it is for the list now asked for, and
+ * "calculating" while the deferred planning catches up (`useDeferredValue` in App).
+ */
+export function shownRouteView(
+  view: RouteView | null,
+  plannedFor: unknown,
+  askedFor: unknown,
+): RouteView {
+  return view !== null && plannedFor === askedFor ? view : CALCULATING;
+}
+
+/**
+ * Plans the route for the list as it is now, once from each entrance, each on its own: an
+ * entrance that can't be planned from (a map error from it alone) is left out, and the
+ * others still work. Never throws: data still loading, data that failed to load, and no
+ * entrance that can be planned from each become a message.
  */
 export function routeViewFor(
   list: readonly ListEntry[],
   routing: LoadedRouting | null,
   loadError: Error | null,
 ): RouteView {
-  if (loadError !== null) return { kind: 'message', text: MESSAGES.loadFailed };
-  if (routing === null) return { kind: 'message', text: MESSAGES.loading };
-  try {
-    const result = planRoute(
-      list.map((entry) => entry.item),
-      routing.data,
-    );
-    return {
-      kind: 'route',
-      result,
-      names: new Map(list.map((entry) => [entry.item.id, entry.name])),
-      areas: routing.areas,
-    };
-  } catch (cause) {
-    console.error(cause);
-    return { kind: 'message', text: MESSAGES.mapError };
+  if (loadError !== null) return { kind: 'message', text: MESSAGES.loadFailed, canRetry: true };
+  if (routing === null) return { kind: 'message', text: MESSAGES.loading, canRetry: false };
+  const items = list.map((entry) => entry.item);
+  const byEntrance = new Map<string, RouteResult>();
+  for (const start of [...routing.data.entrances].sort(compareStrings)) {
+    try {
+      byEntrance.set(start, planRoute(items, routing.data, { start }));
+    } catch (cause) {
+      console.error(cause);
+    }
   }
+  if (byEntrance.size === 0) return { kind: 'message', text: MESSAGES.mapError, canRetry: false };
+  return {
+    kind: 'route',
+    entrances: [...byEntrance.keys()],
+    byEntrance,
+    names: new Map(list.map((entry) => [entry.item.id, entry.name])),
+    areas: routing.areas,
+  };
+}
+
+/**
+ * The route from `start`, or from the default entrance when `start` is null or not one of
+ * them (e.g. after the map changed).
+ */
+export function chosenRoute(
+  view: Extract<RouteView, { kind: 'route' }>,
+  start: string | null,
+): { start: string; result: RouteResult } {
+  const chosen = start !== null && view.byEntrance.has(start) ? start : view.entrances[0]!;
+  return { start: chosen, result: view.byEntrance.get(chosen)! };
+}
+
+/** The entrance after `start`, going round: what "Vaihda aloituspaikka" switches to. */
+export function nextEntrance(view: Extract<RouteView, { kind: 'route' }>, start: string): string {
+  const index = view.entrances.indexOf(start);
+  return view.entrances[(index + 1) % view.entrances.length]!;
 }
 
 /**

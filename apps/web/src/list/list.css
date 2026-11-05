@@ -1,8 +1,10 @@
-/* Shopping list: a panel fixed to the bottom of the screen, on every page. Closed it shows
-   the heading and "Laske reitti"; open, the rows too. Phone first; tap targets 44 px+. */
+/* Shopping list: a panel fixed to the bottom of the screen, on search and its category
+   pages; the route screens replace it. Closed it shows the heading and "Laske reitti"; open,
+   the rows too. Phone first; tap targets 44 px+. */
 
-/* Room under the page, so the last search result never hides behind the closed panel. */
-body {
+/* Room under the page, so the last search result never hides behind the closed panel. Only
+   while the panel is there: the route screens have none. */
+body:has(.shopping-list) {
   padding-bottom: 160px;
 }
 
