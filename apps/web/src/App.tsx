@@ -1,10 +1,10 @@
 import type { Category, ListItem } from '@pathfinder/core';
 import type { ProductHit } from '@pathfinder/search';
-import { useReducer, useState } from 'react';
+import { useMemo, useReducer, useState } from 'react';
 import ShoppingList from './list/ShoppingList';
-import { listReducer, newItemId } from './list/listState';
+import { listReducer, newItemId, type ListEntry } from './list/listState';
 import RoutePage from './route/RoutePage';
-import { routeViewFor, type RouteView } from './route/routeView';
+import { routeViewFor } from './route/routeView';
 import { useRoutingData } from './route/useRoutingData';
 import CategoryPage from './search/CategoryPage';
 import SearchBar from './search/SearchBar';
@@ -18,16 +18,28 @@ import './route/route.css';
 function App() {
   const { engine, version, error } = useSearchEngine();
   const search = useSearch(engine, version);
-  const routing = useRoutingData();
+  // Routing loads once search is ready (or has failed), so it never slows the first search.
+  const {
+    routing,
+    error: routingError,
+    retry: retryRouting,
+  } = useRoutingData(engine !== null || error !== null);
   const [browsing, setBrowsing] = useState<Category | null>(null);
   // Kept in memory only for now: the list is empty again after a reload.
   const [list, dispatch] = useReducer(listReducer, []);
   const [lastAdded, setLastAdded] = useState('');
-  // The route as planned when "Laske reitti" was pressed; null shows search instead.
-  const [routeView, setRouteView] = useState<RouteView | null>(null);
+  // The list as it was when "Laske reitti" was pressed; null shows search instead. The page
+  // is worked out from it and the routing data, so it turns from "loading" into the route
+  // by itself when the data lands, while later edits to the list leave it as it was.
+  const [routedList, setRoutedList] = useState<readonly ListEntry[] | null>(null);
+  const routeView = useMemo(
+    () => routedList && routeViewFor(routedList, routing, routingError),
+    [routedList, routing, routingError],
+  );
 
   const calculateRoute = () => {
-    setRouteView(routeViewFor(list, routing.routing, routing.error));
+    if (routingError !== null) retryRouting();
+    setRoutedList(list);
     window.scrollTo(0, 0);
   };
 
@@ -56,7 +68,7 @@ function App() {
   return (
     <main>
       {routeView ? (
-        <RoutePage view={routeView} onBack={() => setRouteView(null)} />
+        <RoutePage view={routeView} onBack={() => setRoutedList(null)} />
       ) : browsing && engine ? (
         <CategoryPage
           key={browsing.id}
