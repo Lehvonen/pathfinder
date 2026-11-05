@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { itemName, placeName } from './routeView';
 import type { MapAreas } from './loadRoutingData';
 import TickItem from './TickItem';
+import { useSheetDrag } from './useSheetDrag';
 
 type ShoppingSheetProps = {
   route: Route;
@@ -22,7 +23,7 @@ type ShoppingSheetProps = {
  * shows the current stop's items, each with a tick; the route moves on once all are ticked.
  * Its heading opens it over most of the screen with every stop, scrollable, so items can be
  * ticked or unticked anywhere. Once every stop is done it says so and offers "Lopeta
- * ostokset". Opened by a tap for now; dragging comes with the gestures (PR C).
+ * ostokset". Its heading opens and closes it with a tap, or drags it (`useSheetDrag`).
  *
  * When a stop is done while the sheet is closed, focus moves to the next stop's heading (or
  * to "Kaikki kerätty"): the ticked button has just left the screen, and focus would otherwise
@@ -31,6 +32,9 @@ type ShoppingSheetProps = {
 function ShoppingSheet(props: ShoppingSheetProps) {
   const { route, done, ticked, names, areas, onTick, onFinish, unplaced = [] } = props;
   const [open, setOpen] = useState(false);
+  const sheet = useRef<HTMLElement>(null);
+  const handle = useRef<HTMLButtonElement>(null);
+  const wasDrag = useSheetDrag({ sheet, handle, open, setOpen });
   const allDone = done >= route.stops.length;
   const shown = open ? route.stops : route.stops.slice(done, done + 1);
   const nextStopHeading = useRef<HTMLHeadingElement>(null);
@@ -47,15 +51,21 @@ function ShoppingSheet(props: ShoppingSheetProps) {
 
   return (
     <section
+      ref={sheet}
       className={open ? 'shopping-sheet shopping-sheet--open' : 'shopping-sheet'}
       aria-label="Kerättävät"
     >
       <button
         type="button"
+        ref={handle}
         className="shopping-sheet__toggle"
         aria-expanded={open}
-        onClick={() => setOpen((wasOpen) => !wasOpen)}
+        onClick={() => {
+          // A drag already opened or closed it; the click that follows is not a tap.
+          if (!wasDrag()) setOpen((wasOpen) => !wasOpen);
+        }}
       >
+        <span className="shopping-sheet__grip" aria-hidden="true" />
         <span>{open ? 'Koko lista' : allDone ? 'Kaikki kerätty' : 'Seuraavaksi'}</span>
         <span aria-hidden="true">{open ? '▼' : '▲'}</span>
       </button>
