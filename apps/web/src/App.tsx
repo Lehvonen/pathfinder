@@ -5,7 +5,7 @@ import ShoppingList from './list/ShoppingList';
 import { listReducer, newItemId, type ListEntry } from './list/listState';
 import ListEditPage from './route/ListEditPage';
 import RouteOverview from './route/RouteOverview';
-import { routeViewFor, type RouteView } from './route/routeView';
+import { routeViewFor, shownRouteView } from './route/routeView';
 import { useRoutingData } from './route/useRoutingData';
 import CategoryPage from './search/CategoryPage';
 import SearchBar from './search/SearchBar';
@@ -19,9 +19,6 @@ import './map/map.css';
 
 /** Which screen is showing; search includes its category pages. */
 type Screen = 'search' | 'route' | 'edit';
-
-/** Shown for the moment between pressing the button and the route being planned. */
-const CALCULATING: RouteView = { kind: 'message', text: 'Lasketaan reittiä…', canRetry: false };
 
 function App() {
   const { engine, version, error } = useSearchEngine();
@@ -95,7 +92,7 @@ function App() {
     <main>
       {screen === 'route' ? (
         <RouteOverview
-          view={routeView !== null && plannedList === routedList ? routeView : CALCULATING}
+          view={shownRouteView(routeView, plannedList, routedList)}
           start={start}
           onChangeStart={setStart}
           onEditList={() => showScreen('edit')}
