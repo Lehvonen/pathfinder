@@ -3,6 +3,9 @@ import type { ProductHit } from '@pathfinder/search';
 import { useReducer, useState } from 'react';
 import ShoppingList from './list/ShoppingList';
 import { listReducer, newItemId } from './list/listState';
+import RoutePage from './route/RoutePage';
+import { routeViewFor, type RouteView } from './route/routeView';
+import { useRoutingData } from './route/useRoutingData';
 import CategoryPage from './search/CategoryPage';
 import SearchBar from './search/SearchBar';
 import SearchResults from './search/SearchResults';
@@ -10,14 +13,23 @@ import { useSearch } from './search/useSearch';
 import { useSearchEngine } from './search/useSearchEngine';
 import './search/search.css';
 import './list/list.css';
+import './route/route.css';
 
 function App() {
   const { engine, version, error } = useSearchEngine();
   const search = useSearch(engine, version);
+  const routing = useRoutingData();
   const [browsing, setBrowsing] = useState<Category | null>(null);
   // Kept in memory only for now: the list is empty again after a reload.
   const [list, dispatch] = useReducer(listReducer, []);
   const [lastAdded, setLastAdded] = useState('');
+  // The route as planned when "Laske reitti" was pressed; null shows search instead.
+  const [routeView, setRouteView] = useState<RouteView | null>(null);
+
+  const calculateRoute = () => {
+    setRouteView(routeViewFor(list, routing.routing, routing.error));
+    window.scrollTo(0, 0);
+  };
 
   const add = (item: ListItem, name: string) => {
     dispatch({ type: 'add', item, name });
@@ -43,7 +55,9 @@ function App() {
 
   return (
     <main>
-      {browsing && engine ? (
+      {routeView ? (
+        <RoutePage view={routeView} onBack={() => setRouteView(null)} />
+      ) : browsing && engine ? (
         <CategoryPage
           key={browsing.id}
           engine={engine}
@@ -76,8 +90,7 @@ function App() {
         list={list}
         onSetQuantity={(id, quantity) => dispatch({ type: 'setQuantity', id, quantity })}
         onRemove={(id) => dispatch({ type: 'remove', id })}
-        // Routing is not built yet; the button is there so the flow can be tried.
-        onCalculateRoute={() => {}}
+        onCalculateRoute={calculateRoute}
       />
     </main>
   );
