@@ -650,20 +650,20 @@ open it scrolls within half the screen. Items can be added, removed, and given a
 from 1 to 99 with a − / + stepper; adding something already on the list raises its amount
 instead of adding a second row. A "Laske reitti" button shows whether the list is open or
 closed, disabled while it is empty, and opens the route overview ("Route overview" below).
-The state is a plain `useReducer` in `App.tsx`, kept in memory only, so a reload empties
-the list. Items are ticked on the shopping screen (`setChecked`; any rise in amount unticks); the
+The state is a plain `useReducer` in `App.tsx`, saved on the device (below). Items are ticked on the shopping screen (`setChecked`; any rise in amount unticks); the
 panel and "Muokkaa listaa" show a ticked item struck through, with "✓ Kerätty" to untick it,
-since a ticked item is left out of the next route. Reorder, Zustand and `localStorage` are still to come; Zustand
-when the map needs the list too.
+since a ticked item is left out of the next route. Reorder and Zustand are still to come;
+Zustand when the map needs the list too.
 
-**Planned — the list survives a refresh** (`docs/plans/device-storage.md` §2). The list,
-ticks included, is saved to `localStorage` after every change and loaded as the reducer's
-starting state, so the first render already shows it. After a refresh the app opens on
+**The list survives a refresh** (`useSavedList`, `listStorage.ts`,
+`docs/plans/device-storage.md` §2). The list, ticks included, is saved to `localStorage`
+(`pathfinder.list.v1`) after every change and loaded as the reducer's starting state, so
+the first render already shows it. After a refresh the app opens on
 search with the list; a shop under way is not resumed, but ticked items stay out of the next
 route, so the shopper carries on where they were. **Ticks older than 12 hours are cleared**
 on load, so a shop closed without "Valmis" never hides items from the next one. Saved rows
 are checked on read, rebuilt from their known fields, bad ones dropped and duplicates merged;
-if storage is unavailable the list stays in memory only, as now. No consent is asked:
+if storage is unavailable the list stays in memory only. No consent is asked:
 keeping the shopper's own list is strictly necessary.
 
 ### History and suggestions — planned
@@ -886,7 +886,7 @@ Monday. This outranks every checkbox below.
 - [x] List builder, rough version: a closable panel at the bottom of the search screen; add, remove, amount per item, tick; "Laske reitti" opens the route overview; in memory only (§11)
 - [x] Route overview, rough version: summary, the route on the store map, start at entrance 1 or switch, edit list, messages for loading and map errors (§11, `docs/plans/route-map.md`)
 - [ ] List builder, the rest: reorder; Zustand
-- [ ] The list survives a refresh: saved to `localStorage`, checked on read, ticks cleared after 12 hours (§11, `docs/plans/device-storage.md`)
+- [x] The list survives a refresh: saved to `localStorage`, checked on read, ticks cleared after 12 hours (§11, `docs/plans/device-storage.md`)
 - [ ] Purchase history and suggestions: opt-in, on the device only, "Usein ostamasi" on search, withdrawal always reachable (§11, `docs/plans/device-storage.md`)
 - [ ] SVG map: shelf polygons, route legs, numbered pins _(rough version at department level: area shapes, the route in green, numbered nodes; shelf polygons wait for the detailed map)_
 - [ ] Three path states; animated current leg _(three states done, rough: walked and next deep green, ahead light green; not animated)_
