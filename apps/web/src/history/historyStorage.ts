@@ -57,15 +57,21 @@ function saveHistory(history: readonly Trip[], store: ReturnType<typeof pageStor
 /**
  * Adds a trip and saves the history, both read from storage first, not from memory. The
  * answer: if another tab has since said "no", nothing is saved and the history returned is
- * empty, since nothing is kept without consent. The history: a tab left open for days never overwrites
- * trips another tab recorded. Returns the history as saved; if storage fails, the trip is
- * kept in the history returned, for this visit only.
+ * empty, since nothing is kept without consent. The history: a tab left open for days
+ * never overwrites trips another tab recorded. Returns the history as saved, and the answer
+ * as read (null if it could not be), so the caller can follow it; if storage fails, the
+ * trip is kept in the history returned, for this visit only.
  */
-export function recordTrip(trip: Trip, today: string, store = pageStorage()): Trip[] {
-  if (loadConsent(store) === 'no') return [];
+export function recordTrip(
+  trip: Trip,
+  today: string,
+  store = pageStorage(),
+): { history: Trip[]; consent: Consent } {
+  const consent = loadConsent(store);
+  if (consent === 'no') return { history: [], consent };
   const history = trimHistory([...loadHistory(today, store), trip], today);
   saveHistory(history, store);
-  return history;
+  return { history, consent };
 }
 
 /**

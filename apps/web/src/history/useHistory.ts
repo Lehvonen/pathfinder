@@ -42,8 +42,9 @@ export function useHistory() {
       const today = dayOf(new Date());
       const trip = tripToRecord(consent, list, today);
       if (trip === null) return;
-      setTrips(recordTrip(trip, today));
-      setConsent(loadConsent() ?? consent);
+      const saved = recordTrip(trip, today);
+      setTrips(saved.history);
+      setConsent(saved.consent ?? consent);
     },
     /** "Unohda ostohistoria": deletes the trips; recording carries on from the next one. */
     forget() {

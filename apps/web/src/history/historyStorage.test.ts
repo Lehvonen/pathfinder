@@ -57,7 +57,7 @@ describe('recordTrip and loadHistory', () => {
   it('add a trip to the saved history and read it back', () => {
     const store = memoryStore();
     recordTrip(trip('2026-11-01'), today, store);
-    const history = recordTrip(trip(today), today, store);
+    const { history } = recordTrip(trip(today), today, store);
     expect(history).toEqual([trip('2026-11-01'), trip(today)]);
     expect(loadHistory(today, store)).toEqual(history);
   });
@@ -67,14 +67,17 @@ describe('recordTrip and loadHistory', () => {
     recordTrip(trip('2026-11-01'), today, store);
     // Another tab recorded a trip in between.
     store.data.set(HISTORY_KEY, JSON.stringify([trip('2026-11-01'), trip('2026-11-05')]));
-    expect(recordTrip(trip(today), today, store)).toHaveLength(3);
+    expect(recordTrip(trip(today), today, store).history).toHaveLength(3);
   });
 
   it('trim when reading and when recording', () => {
     const store = memoryStore();
     store.data.set(HISTORY_KEY, JSON.stringify([trip('2025-11-07'), trip('2026-11-01')]));
     expect(loadHistory(today, store)).toEqual([trip('2026-11-01')]);
-    expect(recordTrip(trip(today), today, store)).toEqual([trip('2026-11-01'), trip(today)]);
+    expect(recordTrip(trip(today), today, store).history).toEqual([
+      trip('2026-11-01'),
+      trip(today),
+    ]);
   });
 
   it('load an empty history from nothing saved or text that is not JSON', () => {
@@ -86,8 +89,8 @@ describe('recordTrip and loadHistory', () => {
 
   it('keep the trip for this visit when storage fails, and never throw', () => {
     expect(loadHistory(today, brokenStore)).toEqual([]);
-    expect(recordTrip(trip(today), today, brokenStore)).toEqual([trip(today)]);
-    expect(recordTrip(trip(today), today, null)).toEqual([trip(today)]);
+    expect(recordTrip(trip(today), today, brokenStore).history).toEqual([trip(today)]);
+    expect(recordTrip(trip(today), today, null).history).toEqual([trip(today)]);
   });
 });
 
@@ -98,15 +101,18 @@ describe('recordTrip and the answer', () => {
     recordTrip(trip('2026-11-01'), today, store);
     // Another tab: "Älä muista".
     saveConsent('no', store);
-    expect(recordTrip(trip(today), today, store)).toEqual([]);
+    expect(recordTrip(trip(today), today, store)).toEqual({ history: [], consent: 'no' });
     expect(store.data.has(HISTORY_KEY)).toBe(false);
   });
 
   it('records when the saved answer is yes, or cannot be read', () => {
     const store = memoryStore();
     saveConsent('yes', store);
-    expect(recordTrip(trip(today), today, store)).toEqual([trip(today)]);
-    expect(recordTrip(trip(today), today, null)).toEqual([trip(today)]);
+    expect(recordTrip(trip(today), today, store)).toEqual({
+      history: [trip(today)],
+      consent: 'yes',
+    });
+    expect(recordTrip(trip(today), today, null)).toEqual({ history: [trip(today)], consent: null });
   });
 });
 
