@@ -95,8 +95,10 @@ shopper's phone.
   **"Älä muista"**, whether or not there are suggestions. "Unohda ostohistoria" deletes the
   history at once; recording carries on from the next trip. "Älä muista" deletes the history
   and stores `"no"`. One tap each, with no "are you sure". Each is announced politely
-  ("Ostohistoria unohdettu…", "Ostohistoria poistettu…"), and focus moves to the status line
-  after "Unohda ostohistoria" or a suggestion's "Lisää", since what was pressed is gone.
+  ("Ostohistoria unohdettu…", "Ostohistoria poistettu…"). Focus moves to the status line
+  after "Unohda ostohistoria" or a suggestion's "Lisää", and to that message after "Älä
+  muista", since what was pressed is gone. Not to the search box: on a phone that opens the
+  keyboard.
 
 ## 4. Suggestions (PR 3)
 
@@ -143,7 +145,7 @@ shopper's phone.
 | 2   | `apps/web/src/App.tsx`                          | `useSavedList` in place of `useReducer`; its "in memory only" comment                  |
 | 2   | `apps/web/src/route/routeView.ts`               | Reload comments, also in `useRoutingData.ts` and `shopping.css`                        |
 | 2   | `docs/ARCHITECTURE.md`, `docs/plans/*.md`       | §11's current state, `list.md`, `route-map.md`, `routing.md`, this file                |
-| 3   | `apps/web/src/list/listState.ts` + test         | `Thing`: `isSameThing` takes history items too                                         |
+| 3   | `apps/web/src/list/listState.ts` + test         | `Thing`, so `isSameThing` takes history items too; `thingKey`, its key form            |
 | 3   | `apps/web/src/list/storeStubs.ts`               | Fake storage for the tests, shared by the list and the history                         |
 | 3   | `apps/web/src/list/listStorage.ts` + test       | `readNamedItem`, `isRecord`: the row check shared with the history                     |
 | 3   | `apps/web/src/history/history.ts` + test        | Record a trip from the ticked items; when to record; trim to 50 trips and a year       |
