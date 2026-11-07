@@ -668,9 +668,10 @@ are checked on read, rebuilt from their known fields, bad ones dropped and dupli
 if storage is unavailable the list stays in memory only. No consent is asked:
 keeping the shopper's own list is strictly necessary.
 
-### History and suggestions — planned
+### History and suggestions — a rough first version
 
-`apps/web/src/history/`, `docs/plans/device-storage.md` §3–5. **Only on the device, only
+`apps/web/src/history/` (`useHistory`, `historyStorage.ts`, `ranking.ts`),
+`docs/plans/device-storage.md` §3–5. **Only on the device, only
 with consent.** The finish card asks whether to remember purchases ("Kyllä" / "Ei kiitos")
 until the shopper answers; it is off until they say yes, and a trip finished without an
 answer is not recorded. With consent, "Valmis" records the ticked items and the day, nothing
@@ -679,7 +680,9 @@ else, keeping the newest 50 trips and at most a year. On search, with the search
 counting more, each with "Lisää". **Withdrawing is always one tap away:** while history is
 on, the same place shows "Ostohistoria on päällä" with "Unohda ostohistoria" (deletes the
 history) and "Älä muista" (deletes it and withdraws consent), even with no suggestions to
-show. Nothing is sent anywhere (§2).
+show. Nothing is sent anywhere (§2). The history is in `localStorage`
+(`pathfinder.history.v1`, the answer in `pathfinder.historyConsent.v1`); each saved item goes
+through the same row check as the saved list.
 
 ### Route mode
 
@@ -889,7 +892,7 @@ Monday. This outranks every checkbox below.
 - [x] Route overview, rough version: summary, the route on the store map, start at entrance 1 or switch, edit list, messages for loading and map errors (§11, `docs/plans/route-map.md`)
 - [ ] List builder, the rest: reorder; Zustand
 - [x] The list survives a refresh: saved to `localStorage`, checked on read, ticks cleared after 12 hours (§11, `docs/plans/device-storage.md`)
-- [ ] Purchase history and suggestions: opt-in, on the device only, "Usein ostamasi" on search, withdrawal always reachable (§11, `docs/plans/device-storage.md`)
+- [x] Purchase history and suggestions: opt-in, on the device only, "Usein ostamasi" on search, withdrawal always reachable (§11, `docs/plans/device-storage.md`)
 - [ ] SVG map: shelf polygons, route legs, numbered pins _(rough version at department level: area shapes, the route in green, numbered nodes; shelf polygons wait for the detailed map)_
 - [ ] Three path states; animated current leg _(three states done, rough: walked and next deep green, ahead light green; not animated)_
 - [ ] Auto-zoom to current leg, full-route toggle _(auto-zoom with a glide on the shopping screen; the overview shows the full route; pinch and pan anywhere)_
