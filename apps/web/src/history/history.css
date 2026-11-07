@@ -32,6 +32,11 @@
   background: #fff;
 }
 
+/* Once answered, the buttons are hidden but keep their room, so "Valmis" stays put. */
+.remember-offer__answers--done {
+  visibility: hidden;
+}
+
 /* ── "Usein ostamasi" on search ─────────────────────────────── */
 
 .suggestions {
@@ -45,6 +50,7 @@
 
 .suggestions__status {
   margin: 12px 0 6px;
+  outline-offset: 2px;
   font-size: 13px;
   color: #666;
 }
