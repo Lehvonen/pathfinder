@@ -1,6 +1,6 @@
 import type { Category, ListItem, Route } from '@pathfinder/core';
 import type { ProductHit } from '@pathfinder/search';
-import { useDeferredValue, useMemo, useState } from 'react';
+import { useDeferredValue, useMemo, useRef, useState } from 'react';
 import { dayOf } from './history/history';
 import RememberOffer from './history/RememberOffer';
 import Suggestions from './history/Suggestions';
@@ -67,6 +67,9 @@ function App() {
   const purchases = useHistory();
   // "Lisätty listalle: …", and what the history controls did, read out politely.
   const [note, setNote] = useState('');
+  // Takes focus after "Älä muista", which removes the section its button was in. Not the
+  // search box: on a phone that would open the keyboard.
+  const noteLine = useRef<HTMLParagraphElement>(null);
   const [screen, setScreen] = useState<Screen>('search');
   // The entrance the shopper chose; null is the default, entrance 1.
   const [start, setStart] = useState<string | null>(null);
@@ -258,6 +261,7 @@ function App() {
               onStop={() => {
                 purchases.answer('no');
                 setNote('Ostohistoria poistettu. Ostoksiasi ei enää muisteta.');
+                noteLine.current?.focus();
               }}
             />
           )}
@@ -265,7 +269,7 @@ function App() {
       )}
       {screen === 'search' && (
         <>
-          <p className="search-note" aria-live="polite">
+          <p className="search-note" aria-live="polite" ref={noteLine} tabIndex={-1}>
             {note}
           </p>
           {/* Only on search: the route screens replace it (docs/plans/route-map.md). */}
