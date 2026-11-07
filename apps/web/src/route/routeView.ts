@@ -22,7 +22,7 @@ export type RouteView =
 
 export const MESSAGES = {
   loading: 'Reittitiedot latautuvat vielä. Hetki…',
-  // Not "reload the page": the list lives in memory only, so a reload would empty it.
+  // Not "reload the page": a reload keeps the list but leaves the route for search.
   // "Yritä uudelleen" loads the data again (useRoutingData's retry).
   loadFailed: 'Reittitiedot eivät latautuneet. Tarkista yhteys ja paina Yritä uudelleen.',
   mapError: 'Reittiä ei voitu laskea: kaupan kartassa on virhe.',
