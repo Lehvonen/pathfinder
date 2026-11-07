@@ -1,6 +1,6 @@
 # Plan: the list and purchase history, kept on the device
 
-**Status:** PR 2 (the list survives a refresh) built; PR 3 (history, suggestions) planned.
+**Status:** PR 2 (the list survives a refresh) merged (#33); PR 3 (history, suggestions) built.
 **A rough draft, not a source of truth**: written before the code, to agree the shape. Where
 this file and the code disagree, the code wins.
 **Architecture refs:** §2 (scope), §11 (list builder), §17 (no backend)
@@ -104,7 +104,7 @@ shopper's phone.
   recently picked. "The same thing" is the list's own rule, `isSameThing`.
 - **Adding:** each suggestion has "Lisää", like a search result, which adds it with amount 1
   through the same path as search, so "Lisätty listalle: …" shows as usual.
-- **Pure logic, unit-tested:** `suggestions(history, list, today)` in
+- **Pure logic, unit-tested:** `suggestions(history, list, today)` in `ranking.ts`, in
   `apps/web/src/history/`, beside the list logic, not in `core`: it is about the list, which
   lives in the web app (like `listState.ts`).
 - **Boundary tests:** 1 and 2 trips, 8 and 9 suggestions, 50 and 51 trips, 365 and 366 days,
@@ -128,25 +128,28 @@ shopper's phone.
 
 ## 6. Files
 
-| PR  | File                                            | Role                                                                             |
-| --- | ----------------------------------------------- | -------------------------------------------------------------------------------- |
-| 2   | `apps/web/src/list/listState.ts` + test         | Export `isSameThing`, for merging rows on read                                   |
-| 2   | `apps/web/src/list/listStorage.ts` + test       | `loadList`, `saveList`, `readItem`: read and check the saved list, write it      |
-| 2   | `apps/web/src/list/useSavedList.ts`             | The list reducer, started from the saved list and saved on every change          |
-| 2   | `apps/web/src/App.tsx`                          | `useSavedList` in place of `useReducer`; its "in memory only" comment            |
-| 2   | `apps/web/src/route/routeView.ts`               | Reload comments, also in `useRoutingData.ts` and `shopping.css`                  |
-| 2   | `docs/ARCHITECTURE.md`, `docs/plans/*.md`       | §11's current state, `list.md`, `route-map.md`, `routing.md`, this file          |
-| 3   | `apps/web/src/history/history.ts` + test        | Record a trip from the ticked items; when to record; trim to 50 trips and a year |
-| 3   | `apps/web/src/history/historyStorage.ts` + test | Load, record (read, append, trim, write) and forget; the consent answer          |
-| 3   | `apps/web/src/history/suggestions.ts` + test    | The ranking in §4                                                                |
-| 3   | `apps/web/src/history/useHistory.ts`            | Consent, history, record, forget, for `App.tsx`                                  |
-| 3   | `apps/web/src/history/RememberOffer.tsx`        | The question on the finish card                                                  |
-| 3   | `apps/web/src/route/FinishScreen.tsx`           | Shows the offer until it is answered                                             |
-| 3   | `apps/web/src/history/SuggestionRow.tsx`        | One suggestion: name and "Lisää"                                                 |
-| 3   | `apps/web/src/history/Suggestions.tsx`          | "Usein ostamasi", "Ostohistoria on päällä", "Unohda ostohistoria", "Älä muista"  |
-| 3   | `apps/web/src/history/history.css`              | Their styles                                                                     |
-| 3   | `apps/web/src/App.tsx`                          | Record on "Valmis"; show the suggestions                                         |
-| 3   | `docs/ARCHITECTURE.md`, this file               | §11's current state and this file's status                                       |
+| PR  | File                                            | Role                                                                                   |
+| --- | ----------------------------------------------- | -------------------------------------------------------------------------------------- |
+| 2   | `apps/web/src/list/listState.ts` + test         | Export `isSameThing`, for merging rows on read                                         |
+| 2   | `apps/web/src/list/listStorage.ts` + test       | `loadList`, `saveList`, `readItem`: read and check the saved list, write it            |
+| 2   | `apps/web/src/list/useSavedList.ts`             | The list reducer, started from the saved list and saved on every change                |
+| 2   | `apps/web/src/App.tsx`                          | `useSavedList` in place of `useReducer`; its "in memory only" comment                  |
+| 2   | `apps/web/src/route/routeView.ts`               | Reload comments, also in `useRoutingData.ts` and `shopping.css`                        |
+| 2   | `docs/ARCHITECTURE.md`, `docs/plans/*.md`       | §11's current state, `list.md`, `route-map.md`, `routing.md`, this file                |
+| 3   | `apps/web/src/list/listState.ts` + test         | `Thing`: `isSameThing` takes history items too                                         |
+| 3   | `apps/web/src/list/storeStubs.ts`               | Fake storage for the tests, shared by the list and the history                         |
+| 3   | `apps/web/src/list/listStorage.ts` + test       | `readNamedItem`, `isRecord`: the row check shared with the history                     |
+| 3   | `apps/web/src/history/history.ts` + test        | Record a trip from the ticked items; when to record; trim to 50 trips and a year       |
+| 3   | `apps/web/src/history/historyStorage.ts` + test | Load, record (read, append, trim, write) and forget; the consent answer                |
+| 3   | `apps/web/src/history/ranking.ts` + test        | The ranking in §4; not `suggestions.ts`, which Windows takes for `Suggestions.tsx`     |
+| 3   | `apps/web/src/history/useHistory.ts`            | Consent, history, record, forget, for `App.tsx`                                        |
+| 3   | `apps/web/src/history/RememberOffer.tsx`        | The question on the finish card                                                        |
+| 3   | `apps/web/src/route/FinishScreen.tsx`           | A slot on the card above "Valmis", where `App.tsx` puts the offer until it is answered |
+| 3   | `apps/web/src/history/SuggestionRow.tsx`        | One suggestion: name and "Lisää"                                                       |
+| 3   | `apps/web/src/history/Suggestions.tsx`          | "Usein ostamasi", "Ostohistoria on päällä", "Unohda ostohistoria", "Älä muista"        |
+| 3   | `apps/web/src/history/history.css`              | Their styles                                                                           |
+| 3   | `apps/web/src/App.tsx`                          | Record on "Valmis"; show the suggestions                                               |
+| 3   | `docs/ARCHITECTURE.md`, this file               | §11's current state and this file's status                                             |
 
 ## 7. Decisions
 
