@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ListEntry } from '../list/listState';
 import type { NamedItem } from '../list/listStorage';
 import type { Trip } from './history';
-import { HALF_LIFE_DAYS, MAX_SUGGESTIONS, MIN_TRIPS, suggestions } from './ranking';
+import { MAX_SUGGESTIONS, suggestions, tripWeight } from './ranking';
 
 const today = '2026-11-08';
 
@@ -16,7 +16,6 @@ const names = (picked: NamedItem[]) => picked.map((thing) => thing.name);
 
 describe('suggestions', () => {
   it('suggests things picked on at least 2 trips, not on 1', () => {
-    expect(MIN_TRIPS).toBe(2);
     const history = [trip('2026-11-01', product('1'), product('2')), trip(today, product('1'))];
     expect(names(suggestions(history, [], today))).toEqual(['Tuote 1']);
   });
@@ -26,10 +25,11 @@ describe('suggestions', () => {
     expect(suggestions(history, [], today)).toEqual([]);
   });
 
-  it('suggests at most 8 of 9', () => {
-    const nine = Array.from({ length: MAX_SUGGESTIONS + 1 }, (_, i) => product(`${i}`));
-    const history = [trip('2026-11-01', ...nine), trip(today, ...nine)];
-    expect(suggestions(history, [], today)).toHaveLength(MAX_SUGGESTIONS);
+  it('suggests all of 8, and at most 8 of 9', () => {
+    const things = (n: number) => Array.from({ length: n }, (_, i) => product(`${i}`));
+    const twice = (n: number) => [trip('2026-11-01', ...things(n)), trip(today, ...things(n))];
+    expect(suggestions(twice(MAX_SUGGESTIONS), [], today)).toHaveLength(MAX_SUGGESTIONS);
+    expect(suggestions(twice(MAX_SUGGESTIONS + 1), [], today)).toHaveLength(MAX_SUGGESTIONS);
   });
 
   it('leaves out what is already on the list', () => {
@@ -46,18 +46,26 @@ describe('suggestions', () => {
     expect(names(suggestions(history, list, today))).toEqual(['Tuote 2']);
   });
 
-  it('puts recent trips first: a trip 30 days old counts half', () => {
+  it('weighs a trip by its age: half at 30 days, a quarter at 60', () => {
+    expect(tripWeight(0)).toBe(1);
+    expect(tripWeight(30)).toBeCloseTo(0.5, 10);
+    expect(tripWeight(60)).toBeCloseTo(0.25, 10);
+    expect(tripWeight(-5)).toBe(1);
+  });
+
+  it('puts recent trips first: four trips a month ago tie with two today, five win', () => {
     const monthAgo = '2026-10-09';
-    // Three trips a month ago (1.5) lose to two trips today (2).
-    const history = [
-      trip(monthAgo, product('old')),
-      trip(monthAgo, product('old')),
-      trip(monthAgo, product('old')),
-      trip(today, product('new')),
-      trip(today, product('new')),
-    ];
-    expect(HALF_LIFE_DAYS).toBe(30);
-    expect(names(suggestions(history, [], today))).toEqual(['Tuote new', 'Tuote old']);
+    const twoToday = [trip(today, product('new')), trip(today, product('new'))];
+    const old = (n: number) => Array.from({ length: n }, () => trip(monthAgo, product('old')));
+    // Four at 0.5 each make 2.0, a tie, which goes to the more recently picked.
+    expect(names(suggestions([...old(4), ...twoToday], [], today))).toEqual([
+      'Tuote new',
+      'Tuote old',
+    ]);
+    expect(names(suggestions([...old(5), ...twoToday], [], today))).toEqual([
+      'Tuote old',
+      'Tuote new',
+    ]);
   });
 
   it('breaks a tie by the more recently picked', () => {
