@@ -4,6 +4,7 @@ import {
   LIST_KEY,
   type ListStore,
   loadList,
+  MAX_SAVED_ROWS,
   parseSavedList,
   readItem,
   saveList,
@@ -84,10 +85,16 @@ describe('saveList and loadList', () => {
     expect(loadList(store, now)).toEqual([]);
   });
 
-  it('never throw when storage is blocked, full or missing', () => {
+  it('load an empty list when storage is blocked', () => {
     expect(loadList(brokenStore, now)).toEqual([]);
+  });
+
+  it('never throw when storage is full or blocked on save', () => {
     expect(() => saveList(list, brokenStore, now)).not.toThrow();
     expect(() => saveList([], brokenStore, now)).not.toThrow();
+  });
+
+  it('do nothing when there is no storage', () => {
     expect(loadList(null, now)).toEqual([]);
     expect(() => saveList(list, null, now)).not.toThrow();
   });
@@ -116,6 +123,8 @@ describe('readItem', () => {
     expect(readItem({ ...milk, quantity: 0 })?.quantity).toBe(1);
     expect(readItem({ ...milk, quantity: 500 })?.quantity).toBe(MAX_QUANTITY);
     expect(readItem({ ...milk, quantity: 2.6 })?.quantity).toBe(3);
+    // `JSON.parse('1e999')` gives Infinity.
+    expect(readItem({ ...milk, quantity: JSON.parse('1e999') })?.quantity).toBe(1);
   });
 
   it('refuses anything that is not a usable item', () => {
@@ -197,5 +206,44 @@ describe('parseSavedList', () => {
     const ticked = (savedAt: number) => parseSavedList(saved(rows, savedAt), now)[0]?.item.checked;
     expect(ticked(now - STALE_TICKS_MS)).toBe(true);
     expect(ticked(now - STALE_TICKS_MS - 1)).toBe(false);
+  });
+});
+
+describe('parseSavedList: edge cases', () => {
+  it('caps a merged amount at the maximum', () => {
+    const raw = saved([
+      { item: { ...milk, quantity: 98 }, name: 'Maito 1 l' },
+      { item: { ...milk, id: 'c', quantity: 5 }, name: 'Maito' },
+    ]);
+    expect(parseSavedList(raw, now)[0]?.item.quantity).toBe(MAX_QUANTITY);
+  });
+
+  it('merges a repeated id into its row, and renames a different thing using it', () => {
+    const bread: ListItem = { ...milk, ean: '222', quantity: 1 };
+    const raw = saved([
+      { item: milk, name: 'Maito 1 l' },
+      { item: milk, name: 'Maito 1 l' },
+      { item: bread, name: 'Leipä' },
+    ]);
+    const parsed = parseSavedList(raw, now);
+    expect(parsed).toHaveLength(2);
+    expect(parsed[0]?.item).toMatchObject({ id: 'a', ean: '111', quantity: 4 });
+    expect(parsed[1]?.item).toMatchObject({ ean: '222' });
+    expect(parsed[1]?.item.id).not.toBe('a');
+  });
+
+  it('keeps ticks when the save time is in the future', () => {
+    const raw = saved([{ item: milk, name: 'Maito 1 l' }], now + STALE_TICKS_MS);
+    expect(parseSavedList(raw, now)[0]?.item.checked).toBe(true);
+  });
+
+  it('ignores rows beyond the cap', () => {
+    const rows = Array.from({ length: MAX_SAVED_ROWS + 1 }, (_, i) => ({
+      item: { ...milk, id: `id-${i}`, ean: `${i}` },
+      name: `Tuote ${i}`,
+    }));
+    const parsed = parseSavedList(saved(rows), now);
+    expect(parsed).toHaveLength(MAX_SAVED_ROWS);
+    expect(parsed.at(-1)?.item.id).toBe(`id-${MAX_SAVED_ROWS - 1}`);
   });
 });

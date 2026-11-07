@@ -5,11 +5,18 @@ import { clampQuantity, isSameThing, type ListEntry, newItemId } from './listSta
 export const LIST_KEY = 'pathfinder.list.v1';
 
 /**
- * Ticks older than this are cleared on load. A shopper who paid and closed the app without
- * "Valmis" would otherwise find those items left out of next week's route; no shop lasts
- * 12 hours.
+ * If the list was not saved for this long, its ticks are cleared on load. It is saved on
+ * every change and every start, so this is 12 hours with the app unused, not the age of a
+ * tick. A shopper who paid and closed the app without "Valmis" would otherwise find those
+ * items left out of next week's route; no shop lasts 12 hours.
  */
 export const STALE_TICKS_MS = 12 * 60 * 60 * 1000;
+
+/**
+ * Rows beyond this many are ignored on load. A real list is a few dozen rows; the cap only
+ * stops corrupt or tampered storage from freezing the start, since merging is quadratic.
+ */
+export const MAX_SAVED_ROWS = 500;
 
 /** The part of `Storage` used here, so tests can pass a plain stand-in. */
 export type ListStore = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
@@ -68,7 +75,8 @@ export function readItem(raw: unknown): ItemContent | null {
  * The saved list, checked row by row. A row that is not usable is dropped; a missing or
  * repeated id gets a new one; two rows for the same thing are merged into the first, amounts
  * added and ticked only if both were. Ticks are cleared if the list was saved more than
- * `STALE_TICKS_MS` before `now`. Anything not shaped like a saved list gives an empty one.
+ * `STALE_TICKS_MS` before `now`; a save time in the future keeps them. Rows beyond
+ * `MAX_SAVED_ROWS` are ignored. Anything not shaped like a saved list gives an empty one.
  */
 export function parseSavedList(raw: unknown, now: number): ListEntry[] {
   if (!isRecord(raw) || typeof raw.savedAt !== 'number' || !Array.isArray(raw.entries)) {
@@ -77,7 +85,7 @@ export function parseSavedList(raw: unknown, now: number): ListEntry[] {
   const stale = now - raw.savedAt > STALE_TICKS_MS;
   const ids = new Set<string>();
   const list: ListEntry[] = [];
-  for (const row of raw.entries) {
+  for (const row of raw.entries.slice(0, MAX_SAVED_ROWS)) {
     if (!isRecord(row) || !isRecord(row.item) || !isFilledString(row.name)) continue;
     const content = readItem(row.item);
     if (content === null) continue;
