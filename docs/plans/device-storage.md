@@ -47,8 +47,9 @@ shopper's phone.
 - **Ticks are kept** for a refresh in the middle of a shop. Ticked items are left out of the
   next route (`planRoute`), so "Laske reitti" → "Aloita ostokset" carries on where the
   shopper was.
-- **Stale ticks are cleared.** If the saved list is more than **12 hours** old, every item is
-  unticked on load. A shopper who paid and closed the app without "Valmis" would otherwise
+- **Stale ticks are cleared.** If the list was not saved for **12 hours**, every item is
+  unticked on load. It is saved on every change and every start, so this is 12 hours with
+  the app unused, not the age of each tick. A shopper who paid and closed the app without "Valmis" would otherwise
   find those items silently missing from next week's route. No shop lasts 12 hours.
 - **After a refresh the app opens on search**, with the list. The screen, the planned route
   and the trip (its start time) are not saved (§8).
@@ -168,6 +169,10 @@ shopper's phone.
   finish card's time starts again from the next "Aloita ostokset".
 - **A shop never finished with "Valmis" is not recorded.** Its ticks are cleared after 12
   hours (§2) and the trip is lost to the history.
+- **A tab kept open is never checked for stale ticks.** The check runs only on load, so a
+  phone that keeps the tab alive from one week's shop to the next still hides last week's
+  ticked items from the route. A fix: run the check again on `visibilitychange` or
+  `pageshow`. Already true before PR 2; not fixed there.
 - **Tabs do not share the list.** Two open tabs each save their own; the last write wins.
   The history is safe: recording re-reads storage (§3).
 - **One device, one browser.** No sync, and clearing site data deletes the list and history.
