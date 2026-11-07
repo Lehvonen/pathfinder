@@ -1,8 +1,9 @@
 import type { Category, ListItem, Route } from '@pathfinder/core';
 import type { ProductHit } from '@pathfinder/search';
-import { useDeferredValue, useMemo, useReducer, useState } from 'react';
+import { useDeferredValue, useMemo, useState } from 'react';
 import ShoppingList from './list/ShoppingList';
-import { listReducer, newItemId, pickedCount, type ListEntry } from './list/listState';
+import { newItemId, pickedCount, type ListEntry } from './list/listState';
+import { useSavedList } from './list/useSavedList';
 import FinishScreen from './route/FinishScreen';
 import ListEditPage from './route/ListEditPage';
 import type { MapAreas } from './route/loadRoutingData';
@@ -46,8 +47,8 @@ function App() {
     retry: retryRouting,
   } = useRoutingData(engine !== null || error !== null);
   const [browsing, setBrowsing] = useState<Category | null>(null);
-  // Kept in memory only for now: the list is empty again after a reload.
-  const [list, dispatch] = useReducer(listReducer, []);
+  // Saved on this device, so a refresh keeps it (docs/plans/device-storage.md).
+  const [list, dispatch] = useSavedList();
   const [lastAdded, setLastAdded] = useState('');
   const [screen, setScreen] = useState<Screen>('search');
   // The entrance the shopper chose; null is the default, entrance 1.
