@@ -660,20 +660,24 @@ when the map needs the list too.
 ticks included, is saved to `localStorage` after every change and loaded as the reducer's
 starting state, so the first render already shows it. After a refresh the app opens on
 search with the list; a shop under way is not resumed, but ticked items stay out of the next
-route, so the shopper carries on where they were. Saved rows are checked on read and bad ones
-dropped; if storage is unavailable the list stays in memory only, as now. No consent is
-asked: keeping the shopper's own list is strictly necessary.
+route, so the shopper carries on where they were. **Ticks older than 12 hours are cleared**
+on load, so a shop closed without "Valmis" never hides items from the next one. Saved rows
+are checked on read, rebuilt from their known fields, bad ones dropped and duplicates merged;
+if storage is unavailable the list stays in memory only, as now. No consent is asked:
+keeping the shopper's own list is strictly necessary.
 
 ### History and suggestions — planned
 
 `apps/web/src/history/`, `docs/plans/device-storage.md` §3–5. **Only on the device, only
-with consent.** The first finish card asks once whether to remember purchases ("Kyllä" /
-"Ei kiitos"); it is off until the shopper says yes. With consent, "Valmis" records the
-ticked items and the day, nothing else, keeping the newest 50 trips and at most a year. On
-search, with the search box empty, **"Usein ostamasi"** suggests up to 8 things picked on at
-least 2 trips, recent trips counting more, each with "+ Lisää". "Unohda ostohistoria"
-deletes the history; "Älä muista" deletes it and withdraws consent. Nothing is sent
-anywhere (§2).
+with consent.** The finish card asks whether to remember purchases ("Kyllä" / "Ei kiitos")
+until the shopper answers; it is off until they say yes, and a trip finished without an
+answer is not recorded. With consent, "Valmis" records the ticked items and the day, nothing
+else, keeping the newest 50 trips and at most a year. On search, with the search box empty,
+**"Usein ostamasi"** suggests up to 8 things picked on at least 2 trips, recent trips
+counting more, each with "Lisää". **Withdrawing is always one tap away:** while history is
+on, the same place shows "Ostohistoria on päällä" with "Unohda ostohistoria" (deletes the
+history) and "Älä muista" (deletes it and withdraws consent), even with no suggestions to
+show. Nothing is sent anywhere (§2).
 
 ### Route mode
 
@@ -881,9 +885,9 @@ Monday. This outranks every checkbox below.
 - [ ] App shell, mobile layout, navigation
 - [x] List builder, rough version: a closable panel at the bottom of the search screen; add, remove, amount per item, tick; "Laske reitti" opens the route overview; in memory only (§11)
 - [x] Route overview, rough version: summary, the route on the store map, start at entrance 1 or switch, edit list, messages for loading and map errors (§11, `docs/plans/route-map.md`)
-- [ ] List builder, the rest: reorder, check off; Zustand + `localStorage`
-- [ ] The list survives a refresh: saved to `localStorage`, checked on read (§11, `docs/plans/device-storage.md`)
-- [ ] Purchase history and suggestions: opt-in, on the device only, "Usein ostamasi" on search (§11)
+- [ ] List builder, the rest: reorder; Zustand
+- [ ] The list survives a refresh: saved to `localStorage`, checked on read, ticks cleared after 12 hours (§11, `docs/plans/device-storage.md`)
+- [ ] Purchase history and suggestions: opt-in, on the device only, "Usein ostamasi" on search, withdrawal always reachable (§11, `docs/plans/device-storage.md`)
 - [ ] SVG map: shelf polygons, route legs, numbered pins _(rough version at department level: area shapes, the route in green, numbered nodes; shelf polygons wait for the detailed map)_
 - [ ] Three path states; animated current leg _(three states done, rough: walked and next deep green, ahead light green; not animated)_
 - [ ] Auto-zoom to current leg, full-route toggle _(auto-zoom with a glide on the shopping screen; the overview shows the full route; pinch and pan anywhere)_
@@ -1277,7 +1281,7 @@ time to fix what it reveals.
 | Price                                      | **Allowed in `scraper/cache/` and `kupittaa.csv` only**, never in `data/` (normalised or build)                                                                                                                                                   | People use the CSV; prices are out of scope for the app (§2) and the core tier is budgeted (§14)                                                                                    |
 | Products with no Kupittaa location         | **Not searchable**; `normalise.ts` excludes them as `no-location`, listed in `report.md`                                                                                                                                                          | They cannot be routed, and they are web-shop items (mostly clothing and shoes) that k-ruoka.fi shows no store location for either                                                   |
 | List and history storage                   | **`localStorage` on the device only**; versioned keys, checked on read                                                                                                                                                                            | No backend, as for shared lists; the data is small and read synchronously, so the list shows on the first render                                                                    |
-| Consent for list and history               | **None for the list; opt-in for the history**, asked once on the first finish card, off by default                                                                                                                                                | The ePrivacy rule on storing data on a device exempts only what is strictly necessary for a service the user asked for: their own list is, suggestions are not                      |
+| Consent for list and history               | **None for the list; opt-in for the history**, asked on the finish card until answered, off by default; withdrawal always one tap away on search                                                                                                  | The ePrivacy rule on storing data on a device exempts only what is strictly necessary for a service the user asked for: their own list is, suggestions are not                      |
 
 ### Documented as future work, not as oversights
 
