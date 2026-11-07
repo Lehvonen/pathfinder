@@ -1,8 +1,14 @@
 import type { Category, ListItem, Route } from '@pathfinder/core';
 import type { ProductHit } from '@pathfinder/search';
 import { useDeferredValue, useMemo, useState } from 'react';
+import { dayOf } from './history/history';
+import RememberOffer from './history/RememberOffer';
+import Suggestions from './history/Suggestions';
+import { suggestions } from './history/ranking';
+import { useHistory } from './history/useHistory';
 import ShoppingList from './list/ShoppingList';
 import { newItemId, pickedCount, type ListEntry } from './list/listState';
+import type { NamedItem } from './list/listStorage';
 import { useSavedList } from './list/useSavedList';
 import FinishScreen from './route/FinishScreen';
 import ListEditPage from './route/ListEditPage';
@@ -21,6 +27,7 @@ import './list/list.css';
 import './route/route.css';
 import './map/map.css';
 import './route/shopping.css';
+import './history/history.css';
 
 /** Which screen is showing; search includes its category pages. */
 type Screen = 'search' | 'route' | 'edit' | 'shopping' | 'finish';
@@ -49,6 +56,13 @@ function App() {
   const [browsing, setBrowsing] = useState<Category | null>(null);
   // Saved on this device, so a refresh keeps it (docs/plans/device-storage.md).
   const [list, dispatch] = useSavedList();
+  // Opt-in, on this device only (docs/plans/device-storage.md §3–4). Not `history`, which
+  // would hide the browser's own.
+  const purchases = useHistory();
+  const suggested = useMemo(
+    () => suggestions(purchases.trips, list, dayOf(new Date())),
+    [purchases.trips, list],
+  );
   const [lastAdded, setLastAdded] = useState('');
   const [screen, setScreen] = useState<Screen>('search');
   // The entrance the shopper chose; null is the default, entrance 1.
@@ -113,8 +127,9 @@ function App() {
     setTrip((current) => current && { ...current, finishedAt: Date.now() });
     showScreen('finish');
   };
-  /** "Valmis": the shop is over, so the list starts empty again. */
+  /** "Valmis": the shop is over, so the list starts empty again; the history keeps the ticks. */
   const closeTrip = () => {
+    purchases.record(list);
     dispatch({ type: 'clear' });
     setRoutedList(null);
     setTrip(null);
@@ -142,6 +157,9 @@ function App() {
       },
       `"${label}" (${category.name})`,
     );
+  /** A suggestion goes on the list with amount 1, like a search result. */
+  const addSuggestion = (thing: NamedItem) =>
+    add({ ...thing.item, id: newItemId(), quantity: 1, checked: false }, thing.name);
 
   return (
     <main>
@@ -163,7 +181,9 @@ function App() {
           elapsedMs={(trip.finishedAt ?? trip.startedAt) - trip.startedAt}
           picked={pickedCount(list)}
           onDone={closeTrip}
-        />
+        >
+          {purchases.consent === null && <RememberOffer onAnswer={purchases.answer} />}
+        </FinishScreen>
       ) : screen === 'route' ? (
         <RouteOverview
           view={shownView}
@@ -206,6 +226,14 @@ function App() {
             onAddGeneric={addGeneric}
             onBrowse={setBrowsing}
           />
+          {search.query.trim() === '' && purchases.consent === 'yes' && (
+            <Suggestions
+              things={suggested}
+              onAdd={addSuggestion}
+              onForget={purchases.forget}
+              onStop={() => purchases.answer('no')}
+            />
+          )}
         </>
       )}
       {screen === 'search' && (
