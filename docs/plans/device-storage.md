@@ -74,27 +74,34 @@ shopper's phone.
   kiitos"**, equal in size and weight. "Kyllä" stores `"yes"` and this trip is recorded on
   "Valmis". "Ei kiitos" stores `"no"` and the shopper is not asked again. **Until it is
   answered**, the offer shows on every finish card, and a trip finished without an answer
-  is not recorded.
+  is not recorded. Once answered, the question turns into a short confirmation that takes
+  focus; the buttons are hidden but keep their room, so "Valmis" never moves under a second
+  tap.
 - **What is recorded**, on "Valmis": **ticked items only**, the nearest the app gets to
   "bought". A history item is a `ListItem` without `id` and `checked`, plus the name shown:
   a product's EAN or a generic entry's category id and word, and the amount. The trip gets
   the **day** (`YYYY-MM-DD`, local time) and nothing else: no time, no route, no entrance.
 - **When to record** is pure, tested logic in `history.ts`: only with consent `"yes"` and at
   least one item ticked.
-- **Recording reads storage first**: read, append, trim, write. A tab left open for days
-  then never overwrites trips another tab recorded.
+- **Recording reads storage first**: the answer, then the history; append, trim, write. If
+  another tab has said "no" since, nothing is saved and this tab follows. A tab left open for
+  days never overwrites trips another tab recorded.
 - **Kept small:** the newest **50 trips**, none older than **365 days**, trimmed on every
-  write.
+  write and **tidied on start**: without a "yes", any history left over is deleted; with
+  one, it is written back trimmed, so a year-old trip leaves the device even when nothing
+  new is recorded. Trips are only read with a "yes".
 - **The controls are always reachable.** While consent is `"yes"`, the search screen with an
   empty search box shows **"Ostohistoria on päällä"** with **"Unohda ostohistoria"** and
   **"Älä muista"**, whether or not there are suggestions. "Unohda ostohistoria" deletes the
   history at once; recording carries on from the next trip. "Älä muista" deletes the history
-  and stores `"no"`. One tap each, with no "are you sure".
+  and stores `"no"`. One tap each, with no "are you sure". Each is announced politely
+  ("Ostohistoria unohdettu…", "Ostohistoria poistettu…"), and focus moves to the status line
+  after "Unohda ostohistoria" or a suggestion's "Lisää", since what was pressed is gone.
 
 ## 4. Suggestions (PR 3)
 
-- **Where:** on the search screen while the search box is empty (`query.trim() === ''`, the
-  same rule as `SearchResults`), under the heading **"Usein ostamasi"**, above the history
+- **Where:** on the search screen while the search box is empty (`isEmptyQuery`, the rule
+  `SearchResults` uses too), under the heading **"Usein ostamasi"**, above the history
   controls (§3). Shown only with consent `"yes"`.
 - **Which:** things picked on **at least 2 trips**, so one-off buys are not suggested. Things
   already on the list are left out. At most **8**. With none to show, only the heading is
@@ -141,6 +148,7 @@ shopper's phone.
 | 3   | `apps/web/src/list/listStorage.ts` + test       | `readNamedItem`, `isRecord`: the row check shared with the history                     |
 | 3   | `apps/web/src/history/history.ts` + test        | Record a trip from the ticked items; when to record; trim to 50 trips and a year       |
 | 3   | `apps/web/src/history/historyStorage.ts` + test | Load, record (read, append, trim, write) and forget; the consent answer                |
+| 3   | `apps/web/src/search/emptyQuery.ts` + test      | `isEmptyQuery`, shared by search results and the suggestions                           |
 | 3   | `apps/web/src/history/ranking.ts` + test        | The ranking in §4; not `suggestions.ts`, which Windows takes for `Suggestions.tsx`     |
 | 3   | `apps/web/src/history/useHistory.ts`            | Consent, history, record, forget, for `App.tsx`                                        |
 | 3   | `apps/web/src/history/RememberOffer.tsx`        | The question on the finish card                                                        |
@@ -177,7 +185,7 @@ shopper's phone.
   ticked items from the route. A fix: run the check again on `visibilitychange` or
   `pageshow`. Already true before PR 2; not fixed there.
 - **Tabs do not share the list.** Two open tabs each save their own; the last write wins.
-  The history is safe: recording re-reads storage (§3).
+  The history is safe: recording re-reads the answer and the history from storage (§3).
 - **One device, one browser.** No sync, and clearing site data deletes the list and history.
 - **Safari deletes the data after 7 days without a visit**, unless the app is added to the
   home screen. A weekly shopper is right at that edge.
