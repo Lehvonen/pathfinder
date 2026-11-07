@@ -650,7 +650,7 @@ open it scrolls within half the screen. Items can be added, removed, and given a
 from 1 to 99 with a − / + stepper; adding something already on the list raises its amount
 instead of adding a second row. A "Laske reitti" button shows whether the list is open or
 closed, disabled while it is empty, and opens the route overview ("Route overview" below).
-The state is a plain `useReducer` in `App.tsx`, saved on the device (below). Items are ticked on the shopping screen (`setChecked`; any rise in amount unticks); the
+The state is a `useReducer` in `useSavedList` (`apps/web/src/list/`), which `App.tsx` calls, saved on the device (below). Items are ticked on the shopping screen (`setChecked`; any rise in amount unticks); the
 panel and "Muokkaa listaa" show a ticked item struck through, with "✓ Kerätty" to untick it,
 since a ticked item is left out of the next route. Reorder and Zustand are still to come;
 Zustand when the map needs the list too.
@@ -660,8 +660,10 @@ Zustand when the map needs the list too.
 (`pathfinder.list.v1`) after every change and loaded as the reducer's starting state, so
 the first render already shows it. After a refresh the app opens on
 search with the list; a shop under way is not resumed, but ticked items stay out of the next
-route, so the shopper carries on where they were. **Ticks older than 12 hours are cleared**
-on load, so a shop closed without "Valmis" never hides items from the next one. Saved rows
+route, so the shopper carries on where they were. **If the list was not saved for 12
+hours, its ticks are cleared** on load; it is saved on every change and every start, so that
+is 12 hours with the app unused. A shop closed without "Valmis" then does not hide items from
+the next one, unless the tab stays open in between (`docs/plans/device-storage.md` §8). Saved rows
 are checked on read, rebuilt from their known fields, bad ones dropped and duplicates merged;
 if storage is unavailable the list stays in memory only. No consent is asked:
 keeping the shopper's own list is strictly necessary.
