@@ -8,6 +8,7 @@ import {
   MAX_QUANTITY,
   newItemId,
   pickedCount,
+  thingKey,
 } from './listState';
 
 describe('newItemId', () => {
@@ -226,5 +227,26 @@ describe('isSameThing', () => {
   it('matches items with no id or tick, as the purchase history keeps them', () => {
     expect(isSameThing({ kind: 'product', ean: '111' }, milk)).toBe(true);
     expect(isSameThing({ kind: 'generic', categoryId: 7, label: 'maito' }, anyMilk)).toBe(true);
+  });
+});
+
+describe('thingKey', () => {
+  it('is the same for the same thing, whatever its id, amount or tick', () => {
+    const moreMilk: ListItem = { ...milk, id: 'x', quantity: 5, checked: true };
+    expect(thingKey(milk)).toBe(thingKey(moreMilk));
+    expect(thingKey(anyMilk)).toBe(thingKey({ kind: 'generic', categoryId: 7, label: 'maito' }));
+  });
+
+  it('differs for different things, including a product and a word that look alike', () => {
+    const keys = [
+      thingKey(milk),
+      thingKey(bread),
+      thingKey(anyMilk),
+      thingKey({ kind: 'generic', categoryId: 7, label: 'kevytmaito' }),
+      thingKey({ kind: 'generic', categoryId: 71, label: 'maito' }),
+      thingKey({ kind: 'generic', categoryId: 7, label: '1:maito' }),
+      thingKey({ kind: 'product', ean: 'g:7:maito' }),
+    ];
+    expect(new Set(keys).size).toBe(keys.length);
   });
 });

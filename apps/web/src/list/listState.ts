@@ -51,11 +51,16 @@ export type Thing =
  * purchase history counts and suggests things by it too.
  */
 export function isSameThing(a: Thing, b: Thing): boolean {
-  if (a.kind === 'product' && b.kind === 'product') return a.ean === b.ean;
-  if (a.kind === 'generic' && b.kind === 'generic') {
-    return a.categoryId === b.categoryId && a.label === b.label;
-  }
-  return false;
+  return thingKey(a) === thingKey(b);
+}
+
+/**
+ * The same-thing rule as a string: equal for the same thing, different otherwise. For a
+ * `Map` of things and for React keys. The category id is a whole number, so the first `:`
+ * after it ends it, whatever the word holds.
+ */
+export function thingKey(thing: Thing): string {
+  return thing.kind === 'product' ? `p:${thing.ean}` : `g:${thing.categoryId}:${thing.label}`;
 }
 
 function withQuantity(entry: ListEntry, quantity: number): ListEntry {
