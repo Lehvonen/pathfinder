@@ -206,12 +206,14 @@ describe('pickedCount', () => {
 
 describe('isSameThing', () => {
   it('matches products on the EAN alone', () => {
-    expect(isSameThing(milk, { ...milk, id: 'x', quantity: 5, checked: true })).toBe(true);
+    const moreMilk: ListItem = { ...milk, id: 'x', quantity: 5, checked: true };
+    expect(isSameThing(milk, moreMilk)).toBe(true);
     expect(isSameThing(milk, bread)).toBe(false);
   });
 
   it('matches generic entries on the word and the category', () => {
-    expect(isSameThing(anyMilk, { ...anyMilk, id: 'x' })).toBe(true);
+    const otherId: ListItem = { ...anyMilk, id: 'x' };
+    expect(isSameThing(anyMilk, otherId)).toBe(true);
     expect(isSameThing(anyMilk, { ...anyMilk, label: 'kevytmaito' })).toBe(false);
     expect(isSameThing(anyMilk, { ...anyMilk, categoryId: 8 })).toBe(false);
   });
@@ -219,5 +221,10 @@ describe('isSameThing', () => {
   it('never matches a product with a generic entry', () => {
     expect(isSameThing(milk, anyMilk)).toBe(false);
     expect(isSameThing(anyMilk, milk)).toBe(false);
+  });
+
+  it('matches items with no id or tick, as the purchase history keeps them', () => {
+    expect(isSameThing({ kind: 'product', ean: '111' }, milk)).toBe(true);
+    expect(isSameThing({ kind: 'generic', categoryId: 7, label: 'maito' }, anyMilk)).toBe(true);
   });
 });
