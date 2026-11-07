@@ -2,39 +2,16 @@ import type { ListItem } from '@pathfinder/core';
 import { describe, expect, it } from 'vitest';
 import {
   LIST_KEY,
-  type ListStore,
   loadList,
   MAX_SAVED_ROWS,
   parseSavedList,
   readItem,
+  readNamedItem,
   saveList,
   STALE_TICKS_MS,
 } from './listStorage';
+import { brokenStore, memoryStore } from './storeStubs';
 import { type ListEntry, MAX_QUANTITY } from './listState';
-
-/** A stand-in for `localStorage`, holding strings in a map. */
-function memoryStore(): ListStore & { data: Map<string, string> } {
-  const data = new Map<string, string>();
-  return {
-    data,
-    getItem: (key) => data.get(key) ?? null,
-    setItem: (key, value) => void data.set(key, value),
-    removeItem: (key) => void data.delete(key),
-  };
-}
-
-/** A store whose every call throws, like blocked site data or a full quota. */
-const brokenStore: ListStore = {
-  getItem: () => {
-    throw new Error('blocked');
-  },
-  setItem: () => {
-    throw new Error('full');
-  },
-  removeItem: () => {
-    throw new Error('blocked');
-  },
-};
 
 const now = 1_800_000_000_000;
 
@@ -141,6 +118,28 @@ describe('readItem', () => {
       { ...anyMilk, label: ' ' },
     ];
     for (const raw of refused) expect(readItem(raw)).toBeNull();
+  });
+});
+
+describe('readNamedItem', () => {
+  it('reads an item with its name', () => {
+    expect(readNamedItem({ item: milk, name: 'Maito 1 l', extra: 1 })).toEqual({
+      item: { kind: 'product', ean: '111', quantity: 2 },
+      name: 'Maito 1 l',
+    });
+  });
+
+  it('refuses a row with no usable item or no name', () => {
+    const refused: unknown[] = [
+      null,
+      [],
+      { item: milk },
+      { item: milk, name: '' },
+      { item: milk, name: 3 },
+      { item: { ...milk, ean: '' }, name: 'Maito' },
+      { name: 'Maito' },
+    ];
+    for (const raw of refused) expect(readNamedItem(raw)).toBeNull();
   });
 });
 
