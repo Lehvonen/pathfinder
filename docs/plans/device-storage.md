@@ -1,7 +1,8 @@
 # Plan: the list and purchase history, kept on the device
 
-**Status:** planned, not built. **A rough draft, not a source of truth**: written before the
-code, to agree the shape. Where this file and the code disagree, the code wins.
+**Status:** PR 2 (the list survives a refresh) built; PR 3 (history, suggestions) planned.
+**A rough draft, not a source of truth**: written before the code, to agree the shape. Where
+this file and the code disagree, the code wins.
 **Architecture refs:** §2 (scope), §11 (list builder), §17 (no backend)
 **Covers checklist items:** Track F "The list survives a refresh" and "Purchase history and
 suggestions"
@@ -132,7 +133,7 @@ shopper's phone.
 | 2   | `apps/web/src/list/listStorage.ts` + test       | `loadList`, `saveList`, `readItem`: read and check the saved list, write it      |
 | 2   | `apps/web/src/list/useSavedList.ts`             | The list reducer, started from the saved list and saved on every change          |
 | 2   | `apps/web/src/App.tsx`                          | `useSavedList` in place of `useReducer`; its "in memory only" comment            |
-| 2   | `apps/web/src/route/routeView.ts`               | The `loadFailed` comment: a reload no longer empties the list                    |
+| 2   | `apps/web/src/route/routeView.ts`               | Reload comments, also in `useRoutingData.ts` and `shopping.css`                  |
 | 2   | `docs/ARCHITECTURE.md`, `docs/plans/*.md`       | §11's current state, `list.md`, `route-map.md`, `routing.md`, this file          |
 | 3   | `apps/web/src/history/history.ts` + test        | Record a trip from the ticked items; when to record; trim to 50 trips and a year |
 | 3   | `apps/web/src/history/historyStorage.ts` + test | Load, record (read, append, trim, write) and forget; the consent answer          |
