@@ -97,7 +97,7 @@ for that.
   at the nearer end, or the way it was flicked (`sheetDrag.ts`, tested). It
   moves with `transform`, so opening it never lays the page out again. Closed, its body fits
   the visible 30 % and scrolls, so a stop with many items never runs off the screen. No
-  pull-to-refresh while shopping: a reload would lose the list.
+  pull-to-refresh while shopping: a reload keeps the list but leaves the shop for search.
 - **Zoom:** fits the leg to the next stop automatically on every move (`legFocus`, cached so
   a tick that doesn't move the route on doesn't redraw the map), gliding there; pinch and pan to look around.
 - **Finish:** once every stop is done the sheet says "Kaikki kerätty – kassalle!" with
@@ -114,7 +114,8 @@ for that.
   (about 3.4 px/m). Above 7 px/m, 4 pairs on the real map still touch (e.g. "Kala" and
   "Valmisruoka, vege"), and "Itsepalvelukassat" is wider than its area: tune the line or
   the cut length when zooming arrives (B, C).
-- **The list is kept in memory only**: a reload mid-shop loses it. Saving it comes later.
+- **A reload mid-shop leaves the shop**: the list and its ticks are kept
+  (`docs/plans/device-storage.md`), but the app opens on search and the trip time restarts.
 - **Recalculating mid-shop starts from the entrance**, not from where the shopper is.
 - **The finish card's metres are the last plan's:** after a re-plan mid-shop it counts only
   the route planned then. The items and the time cover the whole shop.

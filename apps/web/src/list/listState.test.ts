@@ -2,6 +2,7 @@ import type { ListItem } from '@pathfinder/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   clampQuantity,
+  isSameThing,
   type ListEntry,
   listReducer,
   MAX_QUANTITY,
@@ -200,5 +201,23 @@ describe('pickedCount', () => {
     list = listReducer(list, { type: 'setChecked', id: 'a', checked: true });
     list = listReducer(list, { type: 'setChecked', id: 'c', checked: true });
     expect(pickedCount(list)).toBe(4);
+  });
+});
+
+describe('isSameThing', () => {
+  it('matches products on the EAN alone', () => {
+    expect(isSameThing(milk, { ...milk, id: 'x', quantity: 5, checked: true })).toBe(true);
+    expect(isSameThing(milk, bread)).toBe(false);
+  });
+
+  it('matches generic entries on the word and the category', () => {
+    expect(isSameThing(anyMilk, { ...anyMilk, id: 'x' })).toBe(true);
+    expect(isSameThing(anyMilk, { ...anyMilk, label: 'kevytmaito' })).toBe(false);
+    expect(isSameThing(anyMilk, { ...anyMilk, categoryId: 8 })).toBe(false);
+  });
+
+  it('never matches a product with a generic entry', () => {
+    expect(isSameThing(milk, anyMilk)).toBe(false);
+    expect(isSameThing(anyMilk, milk)).toBe(false);
   });
 });

@@ -3,7 +3,7 @@
    show the whole list. The sheet moves with `transform`, not `height`, so opening it never
    lays the page out again: no lag. Tap targets are at least 44 px. */
 
-/* No pull-to-refresh while shopping: the list lives in memory only, so a reload loses it. */
+/* No pull-to-refresh while shopping: a reload keeps the list but leaves the shop for search. */
 body:has(.shopping) {
   overscroll-behavior-y: none;
 }

@@ -6,7 +6,8 @@ the code disagree, the code wins.
 **Architecture refs:** §6 (generic entries), §11 (list builder, current state), §4 (Zustand),
 §17 (list items: `id` + `quantity`)
 **Covers checklist items:** Track F "List builder, rough version". Not "the rest": reorder,
-check off, Zustand, `localStorage`
+Zustand. Check off is on the shopping screen (`docs/plans/route-map.md`); `localStorage` is
+in `docs/plans/device-storage.md`
 
 The list is what routing (Track D) takes as input, so it comes before the map and the route.
 The shopper adds items from search, sets how many of each, and removes what they don't need.
@@ -16,17 +17,19 @@ The shopper adds items from search, sets how many of each, and removes what they
 
 All in `apps/web/src/list/`:
 
-| File                  | Role                                                                               |
-| --------------------- | ---------------------------------------------------------------------------------- |
-| `listState.ts` + test | The list logic: `listReducer`, `clampQuantity`, `newItemId`. No React, unit-tested |
-| `ShoppingList.tsx`    | The panel: open / close heading, the rows, the empty message, "Laske reitti"       |
-| `ShoppingListRow.tsx` | One row: name, − amount +, "Poista"                                                |
-| `list.css`            | The fixed bottom panel, rows and stepper                                           |
+| File                    | Role                                                                               |
+| ----------------------- | ---------------------------------------------------------------------------------- |
+| `listState.ts` + test   | The list logic: `listReducer`, `clampQuantity`, `newItemId`. No React, unit-tested |
+| `ShoppingList.tsx`      | The panel: open / close heading, the rows, the empty message, "Laske reitti"       |
+| `ShoppingListRow.tsx`   | One row: name, − amount +, "Poista"                                                |
+| `listStorage.ts` + test | Reads and checks the saved list, writes it (`docs/plans/device-storage.md` §2)     |
+| `useSavedList.ts`       | The list reducer, started from the saved list and saved on every change            |
+| `list.css`              | The fixed bottom panel, rows and stepper                                           |
 
-`App.tsx` holds the state (`useReducer(listReducer, [])`) and builds each `ListItem` when
-search's "Lisää" is pressed. The logic file is `listState.ts`, not `shoppingList.ts`: that
-name differs from `ShoppingList.tsx` only by a capital letter, which Windows treats as the
-same file.
+`useSavedList` holds the state (`useReducer` started from `loadList()`, saved on every
+change); `App.tsx` calls it and builds each `ListItem` when search's "Lisää" is pressed.
+The logic file is `listState.ts`, not `shoppingList.ts`: that name differs from
+`ShoppingList.tsx` only by a capital letter, which Windows treats as the same file.
 
 ## 2. The list state
 
@@ -46,8 +49,8 @@ same file.
   plus a counter. `randomUUID` exists only on https and localhost, and the dev server opened
   from a phone (`http://192.168.…`) is neither: without the fallback, adding crashed there. An
   id only has to be unique within one list; a shared list gets new ids on load (types.ts).
-- **In memory only.** A reload empties the list. Keeping it over a refresh is planned in
-  `docs/plans/device-storage.md` §2.
+- **Saved on the device.** A refresh keeps the list: `useSavedList` saves it to
+  `localStorage` after every change (`docs/plans/device-storage.md` §2).
 
 ## 3. The panel
 
@@ -102,7 +105,7 @@ From the PR #25 review, checked against the code. Not fixed yet:
 1. **Connect "Laske reitti" to routing** (Track D): resolve each item to a node (products
    through their placement, generic entries through `CategoryPlacement`), then order the
    stops.
-2. **Keep the list over a reload**: `localStorage`, planned in `docs/plans/device-storage.md`.
-   Zustand is not needed for it; the reducer stays until the map needs the list.
+2. **Keep the list over a reload**: done, `docs/plans/device-storage.md`. Zustand was
+   not needed for it; the reducer stays until the map needs the list.
 3. **Check off**, which later advances the map (§11).
 4. **Reorder, share links, saved and recurring lists** (§11).

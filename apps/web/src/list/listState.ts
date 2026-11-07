@@ -37,8 +37,11 @@ export function newItemId(): string {
   return `${Date.now().toString(36)}-${idCount.toString(36)}`;
 }
 
-/** The same thing on the list: one product, or one generic word in one category. */
-function isSameThing(a: ListItem, b: ListItem): boolean {
+/**
+ * The same thing on the list: one product, or one generic word in one category. Exported
+ * so a saved list read back from storage merges its rows by the same rule.
+ */
+export function isSameThing(a: ListItem, b: ListItem): boolean {
   if (a.kind === 'product' && b.kind === 'product') return a.ean === b.ean;
   if (a.kind === 'generic' && b.kind === 'generic') {
     return a.categoryId === b.categoryId && a.label === b.label;

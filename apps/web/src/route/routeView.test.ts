@@ -141,7 +141,8 @@ describe('routeViewFor', () => {
       text: MESSAGES.loadFailed,
       canRetry: true,
     });
-    // Never "reload the page": that would empty the list. The route screens have a retry button.
+    // Never "reload the page": that would leave the route for search. The route screens have
+    // a retry button.
     expect(MESSAGES.loadFailed).toContain('paina Yritä uudelleen');
     expect(MESSAGES.loadFailed).not.toContain('lataa sivu');
   });

@@ -92,7 +92,7 @@ only, the split-map error and two-checkout tests; these docs.
   out from that snapshot and the data, so pressed early it shows "loading" and then the
   route by itself.
 - **A failed load is retried** by pressing the button again. The message says so, and never
-  "reload the page": the list lives in memory only, so a reload would empty it.
+  "reload the page": a reload keeps the list but leaves the route for search.
 - **Route page:** numbered stops, each with its area name and its items with amounts; total
   metres and minutes; unplaced items listed; a "Takaisin" button. The list panel stays.
 - **A map error** (`planRoute` throws on a split map, §3) shows a message in place of the

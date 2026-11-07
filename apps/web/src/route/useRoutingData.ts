@@ -5,7 +5,7 @@ export type RoutingDataState = {
   /** `null` until all four routing files have loaded. */
   routing: LoadedRouting | null;
   error: Error | null;
-  /** Loads again after a failure, without a page reload, which would empty the list. */
+  /** Loads again after a failure, without a page reload, which would leave the route. */
   retry(): void;
 };
 
