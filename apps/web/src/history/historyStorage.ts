@@ -44,19 +44,39 @@ export function loadHistory(today: string, store = pageStorage()): Trip[] {
   }
 }
 
+/** Writes the history, or removes the key when it is empty. Never throws. */
+function saveHistory(history: readonly Trip[], store: ReturnType<typeof pageStorage>) {
+  try {
+    if (history.length === 0) store?.removeItem(HISTORY_KEY);
+    else store?.setItem(HISTORY_KEY, JSON.stringify(history));
+  } catch {
+    // Storage full or blocked: the history is not kept after this visit.
+  }
+}
+
 /**
- * Adds a trip and saves the history, read from storage first, not from memory: a tab left
- * open for days then never overwrites trips another tab recorded. Returns the history as
- * saved. If storage fails, the trip is kept in the history returned, for this visit only.
+ * Adds a trip and saves the history, both read from storage first, not from memory. The
+ * answer: if another tab has since said "no", nothing is saved and the history returned is
+ * empty, since nothing is kept without consent. The history: a tab left open for days never overwrites
+ * trips another tab recorded. Returns the history as saved; if storage fails, the trip is
+ * kept in the history returned, for this visit only.
  */
 export function recordTrip(trip: Trip, today: string, store = pageStorage()): Trip[] {
+  if (loadConsent(store) === 'no') return [];
   const history = trimHistory([...loadHistory(today, store), trip], today);
-  try {
-    store?.setItem(HISTORY_KEY, JSON.stringify(history));
-  } catch {
-    // Storage full or blocked: the trip is not kept after this visit.
-  }
+  saveHistory(history, store);
   return history;
+}
+
+/**
+ * Run once on start: makes what is saved match the answer. Without a "yes", any history
+ * left over (from another tab, or an older version) is deleted; with one, the history is
+ * written back trimmed, so trips past a year are gone from the device even when no new trip
+ * is recorded. Safe to run twice.
+ */
+export function tidyHistory(today: string, store = pageStorage()) {
+  if (loadConsent(store) === 'yes') saveHistory(loadHistory(today, store), store);
+  else forgetHistory(store);
 }
 
 /** Deletes the saved history at once. */

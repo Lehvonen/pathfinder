@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { brokenStore, memoryStore } from '../list/storeStubs';
-import { MAX_TRIPS, type Trip } from './history';
+import { dayOf, MAX_TRIPS, type Trip } from './history';
 import {
   CONSENT_KEY,
   forgetHistory,
@@ -10,6 +10,7 @@ import {
   parseHistory,
   recordTrip,
   saveConsent,
+  tidyHistory,
 } from './historyStorage';
 
 const today = '2026-11-08';
@@ -42,8 +43,13 @@ describe('parseHistory', () => {
   });
 
   it('reads only the last trips allowed', () => {
-    const raw = Array.from({ length: MAX_TRIPS + 5 }, () => trip(today));
-    expect(parseHistory(raw)).toHaveLength(MAX_TRIPS);
+    const raw = Array.from({ length: MAX_TRIPS + 5 }, (_, i) =>
+      trip(dayOf(new Date(2026, 0, 1 + i))),
+    );
+    const parsed = parseHistory(raw);
+    expect(parsed).toHaveLength(MAX_TRIPS);
+    expect(parsed[0]?.day).toBe(raw[5]?.day);
+    expect(parsed.at(-1)?.day).toBe(raw.at(-1)?.day);
   });
 });
 
@@ -82,6 +88,58 @@ describe('recordTrip and loadHistory', () => {
     expect(loadHistory(today, brokenStore)).toEqual([]);
     expect(recordTrip(trip(today), today, brokenStore)).toEqual([trip(today)]);
     expect(recordTrip(trip(today), today, null)).toEqual([trip(today)]);
+  });
+});
+
+describe('recordTrip and the answer', () => {
+  it('saves nothing once another tab has said no', () => {
+    const store = memoryStore();
+    saveConsent('yes', store);
+    recordTrip(trip('2026-11-01'), today, store);
+    // Another tab: "Älä muista".
+    saveConsent('no', store);
+    expect(recordTrip(trip(today), today, store)).toEqual([]);
+    expect(store.data.has(HISTORY_KEY)).toBe(false);
+  });
+
+  it('records when the saved answer is yes, or cannot be read', () => {
+    const store = memoryStore();
+    saveConsent('yes', store);
+    expect(recordTrip(trip(today), today, store)).toEqual([trip(today)]);
+    expect(recordTrip(trip(today), today, null)).toEqual([trip(today)]);
+  });
+});
+
+describe('tidyHistory', () => {
+  it('deletes a history left over without a yes', () => {
+    for (const answer of ['no', null] as const) {
+      const store = memoryStore();
+      store.data.set(HISTORY_KEY, JSON.stringify([trip(today)]));
+      if (answer !== null) store.data.set(CONSENT_KEY, answer);
+      tidyHistory(today, store);
+      expect(store.data.has(HISTORY_KEY)).toBe(false);
+    }
+  });
+
+  it('writes the history back trimmed with a yes', () => {
+    const store = memoryStore();
+    saveConsent('yes', store);
+    store.data.set(HISTORY_KEY, JSON.stringify([trip('2025-11-07'), trip('2026-11-01')]));
+    tidyHistory(today, store);
+    expect(JSON.parse(store.data.get(HISTORY_KEY) ?? '')).toEqual([trip('2026-11-01')]);
+  });
+
+  it('removes the key when nothing is left after trimming', () => {
+    const store = memoryStore();
+    saveConsent('yes', store);
+    store.data.set(HISTORY_KEY, JSON.stringify([trip('2025-11-07')]));
+    tidyHistory(today, store);
+    expect(store.data.has(HISTORY_KEY)).toBe(false);
+  });
+
+  it('never throws', () => {
+    expect(() => tidyHistory(today, brokenStore)).not.toThrow();
+    expect(() => tidyHistory(today, null)).not.toThrow();
   });
 });
 
