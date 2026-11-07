@@ -1,6 +1,7 @@
 import type { Category } from '@pathfinder/core';
 import type { ProductHit, SearchResponse } from '@pathfinder/search';
 import CategoryResult from './CategoryResult';
+import { isEmptyQuery } from './emptyQuery';
 import ProductList from './ProductList';
 
 type SearchResultsProps = {
@@ -30,7 +31,7 @@ function SearchResults(props: SearchResultsProps) {
       </p>
     );
   }
-  if (query.trim() === '') return null;
+  if (isEmptyQuery(query)) return null;
   if (!response) {
     return (
       <p className="search-note search-note--delayed" aria-live="polite">

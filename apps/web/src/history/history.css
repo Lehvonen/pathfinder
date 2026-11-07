@@ -1,0 +1,68 @@
+/* Purchase history: the question on the finish card, and "Usein ostamasi" on search
+   (docs/plans/device-storage.md §3–4). Tap targets are at least 44 px. */
+
+/* ── The question on the finish card ────────────────────────── */
+
+.remember-offer {
+  margin: 0 0 16px;
+  padding: 12px;
+  font-size: 14px;
+  text-align: left;
+  background: #f4f7ff;
+  border-radius: 8px;
+}
+
+.finish__card .remember-offer p {
+  margin: 0 0 10px;
+}
+
+.remember-offer__answers {
+  display: flex;
+  gap: 8px;
+}
+
+/* Both answers the same size and weight: no is as easy to say as yes. These override the
+   card's dark, full-width "Valmis" style. */
+.finish__card .remember-offer button {
+  flex: 1;
+  min-height: 44px;
+  padding: 0 12px;
+  font-weight: 600;
+  color: #08060d;
+  background: #fff;
+}
+
+/* Once answered, the buttons are hidden but keep their room, so "Valmis" stays put. */
+.remember-offer__answers--done {
+  visibility: hidden;
+}
+
+/* ── "Usein ostamasi" on search ─────────────────────────────── */
+
+.suggestions {
+  margin: 12px 0;
+}
+
+.suggestions__heading {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.suggestions__status {
+  margin: 12px 0 6px;
+  outline-offset: 2px;
+  font-size: 13px;
+  color: #666;
+}
+
+.suggestions__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.suggestions__controls button {
+  min-height: 44px;
+  padding: 0 12px;
+  font-size: 14px;
+}

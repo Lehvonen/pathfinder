@@ -38,15 +38,29 @@ export function newItemId(): string {
 }
 
 /**
- * The same thing on the list: one product, or one generic word in one category. Exported
- * so a saved list read back from storage merges its rows by the same rule.
+ * What makes two items the same thing: a product's EAN, or a generic entry's word and
+ * category. A `ListItem` is one, and so is an item in the purchase history, which has no id
+ * or tick.
  */
-export function isSameThing(a: ListItem, b: ListItem): boolean {
-  if (a.kind === 'product' && b.kind === 'product') return a.ean === b.ean;
-  if (a.kind === 'generic' && b.kind === 'generic') {
-    return a.categoryId === b.categoryId && a.label === b.label;
-  }
-  return false;
+export type Thing =
+  { kind: 'product'; ean: string } | { kind: 'generic'; categoryId: number; label: string };
+
+/**
+ * The same thing on the list: one product, or one generic word in one category. Exported
+ * so a saved list read back from storage merges its rows by the same rule, and so the
+ * purchase history counts and suggests things by it too.
+ */
+export function isSameThing(a: Thing, b: Thing): boolean {
+  return thingKey(a) === thingKey(b);
+}
+
+/**
+ * The same-thing rule as a string: equal for the same thing, different otherwise. For a
+ * `Map` of things and for React keys. The category id is a whole number, so the first `:`
+ * after it ends it, whatever the word holds.
+ */
+export function thingKey(thing: Thing): string {
+  return thing.kind === 'product' ? `p:${thing.ean}` : `g:${thing.categoryId}:${thing.label}`;
 }
 
 function withQuantity(entry: ListEntry, quantity: number): ListEntry {

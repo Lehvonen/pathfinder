@@ -1,5 +1,5 @@
 import type { Route } from '@pathfinder/core';
-import { useId, type CSSProperties } from 'react';
+import { useId, type CSSProperties, type ReactNode } from 'react';
 import { legsOf, routeFocus } from '../map/mapView';
 import StoreMap from '../map/StoreMap';
 import type { MapAreas } from './loadRoutingData';
@@ -16,6 +16,8 @@ type FinishScreenProps = {
   picked: number;
   /** "Valmis": back to search with an empty list. */
   onDone(): void;
+  /** Shown on the card above "Valmis": the purchase-history question, until it is answered. */
+  children?: ReactNode;
 };
 
 const CONFETTI_COLOURS = ['var(--route-deep)', 'var(--route-light)', '#5cb85c', '#0f5c27'];
@@ -34,7 +36,7 @@ const CONFETTI = Array.from({ length: 30 }, (_, i) => ({
  * the trip in numbers and a short green confetti burst. None of the motion plays when the
  * phone asks for reduced motion.
  */
-function FinishScreen({ route, areas, elapsedMs, picked, onDone }: FinishScreenProps) {
+function FinishScreen({ route, areas, elapsedMs, picked, onDone, children }: FinishScreenProps) {
   const titleId = useId();
   const title = useFocusOnMount<HTMLHeadingElement>();
 
@@ -64,6 +66,7 @@ function FinishScreen({ route, areas, elapsedMs, picked, onDone }: FinishScreenP
             {picked} tuotetta · {formatDistance(route.totalDistance)} · aikaa kului{' '}
             {formatElapsed(elapsedMs)}
           </p>
+          {children}
           <button type="button" onClick={onDone}>
             Valmis
           </button>

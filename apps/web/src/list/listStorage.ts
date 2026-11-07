@@ -39,7 +39,8 @@ export function pageStorage(): ListStore | null {
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+/** A plain object, not null or an array. Exported for the purchase history's own checks. */
+export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
@@ -71,6 +72,20 @@ export function readItem(raw: unknown): ItemContent | null {
   return null;
 }
 
+/** An item's content and the name it is shown by: a list row without id and tick. */
+export type NamedItem = { item: ItemContent; name: string };
+
+/**
+ * A `{ item, name }` row read back from storage: the item checked by `readItem`, the name a
+ * non-empty string; null otherwise. The one row check shared by the saved list and the
+ * purchase history.
+ */
+export function readNamedItem(raw: unknown): NamedItem | null {
+  if (!isRecord(raw) || !isFilledString(raw.name)) return null;
+  const item = readItem(raw.item);
+  return item === null ? null : { item, name: raw.name };
+}
+
 /**
  * The saved list, checked row by row. A row that is not usable is dropped; a missing or
  * repeated id gets a new one; two rows for the same thing are merged into the first, amounts
@@ -86,18 +101,17 @@ export function parseSavedList(raw: unknown, now: number): ListEntry[] {
   const ids = new Set<string>();
   const list: ListEntry[] = [];
   for (const row of raw.entries.slice(0, MAX_SAVED_ROWS)) {
-    if (!isRecord(row) || !isRecord(row.item) || !isFilledString(row.name)) continue;
-    const content = readItem(row.item);
-    if (content === null) continue;
+    const named = readNamedItem(row);
+    if (named === null || !isRecord(row) || !isRecord(row.item)) continue;
     const checked = !stale && row.item.checked === true;
     const savedId = row.item.id;
     const id = isFilledString(savedId) && !ids.has(savedId) ? savedId : newItemId();
-    const item: ListItem = { ...content, id, checked };
+    const item: ListItem = { ...named.item, id, checked };
     const index = list.findIndex((entry) => isSameThing(entry.item, item));
     const first = list[index];
     if (first === undefined) {
       ids.add(id);
-      list.push({ item, name: row.name });
+      list.push({ item, name: named.name });
       continue;
     }
     list[index] = {
