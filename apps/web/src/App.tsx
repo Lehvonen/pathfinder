@@ -18,6 +18,7 @@ import { chosenRoute, routeViewFor, shownRouteView } from './route/routeView';
 import ShoppingPage from './route/ShoppingPage';
 import { useRoutingData } from './route/useRoutingData';
 import CategoryPage from './search/CategoryPage';
+import { isEmptyQuery } from './search/emptyQuery';
 import SearchBar from './search/SearchBar';
 import SearchResults from './search/SearchResults';
 import { useSearch } from './search/useSearch';
@@ -32,8 +33,11 @@ import './history/history.css';
 /** Which screen is showing; search includes its category pages. */
 type Screen = 'search' | 'route' | 'edit' | 'shopping' | 'finish';
 
-/** The shop under way: the route fixed when "Aloita ostokset" was pressed, and when. */
-type Trip = {
+/**
+ * The shop under way: the route fixed when "Aloita ostokset" was pressed, and when. Not
+ * `Trip`, which is a finished shop in the purchase history.
+ */
+type Shop = {
   route: Route;
   /** Items the route could not place, still shown in the open sheet. */
   unplaced: readonly ListItem[];
@@ -42,6 +46,8 @@ type Trip = {
   /** The first "Aloita ostokset": a re-plan mid-shop keeps it, so the time is the whole shop. */
   startedAt: number;
   finishedAt: number | null;
+  /** The finish card asks "Muistetaanko ostoksesi?": set when it opens, so the answer shows. */
+  askToRemember: boolean;
 };
 
 function App() {
@@ -59,11 +65,8 @@ function App() {
   // Opt-in, on this device only (docs/plans/device-storage.md §3–4). Not `history`, which
   // would hide the browser's own.
   const purchases = useHistory();
-  const suggested = useMemo(
-    () => suggestions(purchases.trips, list, dayOf(new Date())),
-    [purchases.trips, list],
-  );
-  const [lastAdded, setLastAdded] = useState('');
+  // "Lisätty listalle: …", and what the history controls did, read out politely.
+  const [note, setNote] = useState('');
   const [screen, setScreen] = useState<Screen>('search');
   // The entrance the shopper chose; null is the default, entrance 1.
   const [start, setStart] = useState<string | null>(null);
@@ -78,7 +81,15 @@ function App() {
     [plannedList, routing, routingError],
   );
   const shownView = shownRouteView(routeView, plannedList, routedList);
-  const [trip, setTrip] = useState<Trip | null>(null);
+  const [trip, setTrip] = useState<Shop | null>(null);
+  // "Usein ostamasi" is worked out only while it shows: not on every tick mid-shop.
+  const showSuggestions =
+    screen === 'search' && !browsing && isEmptyQuery(search.query) && purchases.consent === 'yes';
+  const today = dayOf(new Date());
+  const suggested = useMemo(
+    () => (showSuggestions ? suggestions(purchases.trips, list, today) : []),
+    [showSuggestions, purchases.trips, list, today],
+  );
   // The ticks are the list's own (`checked`): the shopping screen ticks and unticks them, and
   // the list panel and edit screen show them with "✓ Kerätty" to untick. A ticked item is
   // left out of the next route, so that is how it gets back on.
@@ -119,12 +130,20 @@ function App() {
             areas: shownView.areas,
             startedAt: current?.startedAt ?? Date.now(),
             finishedAt: null,
+            askToRemember: false,
           }));
           showScreen('shopping');
         }
       : undefined;
   const finishShopping = () => {
-    setTrip((current) => current && { ...current, finishedAt: Date.now() });
+    setTrip(
+      (current) =>
+        current && {
+          ...current,
+          finishedAt: Date.now(),
+          askToRemember: purchases.consent === null,
+        },
+    );
     showScreen('finish');
   };
   /** "Valmis": the shop is over, so the list starts empty again; the history keeps the ticks. */
@@ -138,7 +157,7 @@ function App() {
 
   const add = (item: ListItem, name: string) => {
     dispatch({ type: 'add', item, name });
-    setLastAdded(name);
+    setNote(`Lisätty listalle: ${name}`);
   };
   const addProduct = (product: ProductHit) =>
     add(
@@ -182,7 +201,9 @@ function App() {
           picked={pickedCount(list)}
           onDone={closeTrip}
         >
-          {purchases.consent === null && <RememberOffer onAnswer={purchases.answer} />}
+          {trip.askToRemember && (
+            <RememberOffer consent={purchases.consent} onAnswer={purchases.answer} />
+          )}
         </FinishScreen>
       ) : screen === 'route' ? (
         <RouteOverview
@@ -226,12 +247,18 @@ function App() {
             onAddGeneric={addGeneric}
             onBrowse={setBrowsing}
           />
-          {search.query.trim() === '' && purchases.consent === 'yes' && (
+          {showSuggestions && (
             <Suggestions
               things={suggested}
               onAdd={addSuggestion}
-              onForget={purchases.forget}
-              onStop={() => purchases.answer('no')}
+              onForget={() => {
+                purchases.forget();
+                setNote('Ostohistoria unohdettu. Seuraavat ostokset muistetaan taas.');
+              }}
+              onStop={() => {
+                purchases.answer('no');
+                setNote('Ostohistoria poistettu. Ostoksiasi ei enää muisteta.');
+              }}
             />
           )}
         </>
@@ -239,7 +266,7 @@ function App() {
       {screen === 'search' && (
         <>
           <p className="search-note" aria-live="polite">
-            {lastAdded && `Lisätty listalle: ${lastAdded}`}
+            {note}
           </p>
           {/* Only on search: the route screens replace it (docs/plans/route-map.md). */}
           <ShoppingList
