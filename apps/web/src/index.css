@@ -15,7 +15,7 @@
   --route-light: #a9d3b5;
   --lightlight: #e5e7eb;
 
-  --topbar-height: 56px;
+  --topbar-height: 73px;
 }
 
 body {
@@ -40,9 +40,12 @@ button {
 }
 
 @media (hover: hover) {
-  button:not(:disabled):hover {
+  :where(button):not(:disabled):hover {
     background: var(--light-blue);
     color: var(--ocean-blue);
+  }
+  button.app-brand:hover {
+    background: rgba(0, 53, 122, 0.06);
   }
 }
 
