@@ -13,7 +13,7 @@
 
 .search-bar {
   position: sticky;
-  top: 0;
+  top: var(--topbar-height);
   z-index: 1;
   display: flex;
   gap: 8px;

@@ -186,18 +186,21 @@ function App() {
 
   return (
     <main>
-      <header className="app-topbar">
-        <button
-          type="button"
-          className="app-brand"
-          onClick={() => {
-            setBrowsing(null);
-            showScreen('search');
-          }}
-        >
-          <img src={logoUrl} alt="" className="app-logo" />
-        </button>
-      </header>
+      {screen !== 'shopping' && screen !== 'finish' && (
+        <header className="app-topbar">
+          <button
+            type="button"
+            className="app-brand"
+            aria-label="PathFinder, etusivulle"
+            onClick={() => {
+              setBrowsing(null);
+              showScreen('search');
+            }}
+          >
+            <img src={logoUrl} alt="" className="app-logo" />
+          </button>
+        </header>
+      )}
 
       {screen === 'shopping' && trip !== null ? (
         <ShoppingPage
