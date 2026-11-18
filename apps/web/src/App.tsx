@@ -29,6 +29,7 @@ import './route/route.css';
 import './map/map.css';
 import './route/shopping.css';
 import './history/history.css';
+import logoUrl from './brand/pathfinder.logo.transparent.png';
 
 /** Which screen is showing; search includes its category pages. */
 type Screen = 'search' | 'route' | 'edit' | 'shopping' | 'finish';
@@ -185,6 +186,19 @@ function App() {
 
   return (
     <main>
+      <header className="app-topbar">
+        <button
+          type="button"
+          className="app-brand"
+          onClick={() => {
+            setBrowsing(null);
+            showScreen('search');
+          }}
+        >
+          <img src={logoUrl} alt="" className="app-logo" />
+        </button>
+      </header>
+
       {screen === 'shopping' && trip !== null ? (
         <ShoppingPage
           route={trip.route}

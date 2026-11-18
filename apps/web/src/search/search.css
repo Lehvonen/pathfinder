@@ -18,7 +18,7 @@
   display: flex;
   gap: 8px;
   padding: 8px 0;
-  background: #fff;
+  background: var(--bg-canvas);
 }
 
 .search-bar input {

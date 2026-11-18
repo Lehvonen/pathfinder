@@ -72,7 +72,7 @@ body:has(.shopping-list) {
   margin-top: 8px;
   font-weight: 600;
   color: #fff;
-  background: #08060d;
+  background: var(--ocean-blue);
 }
 
 .shopping-list__route:disabled {

@@ -5,6 +5,11 @@
     Roboto,
     sans-serif;
   color: #08060d;
+
+  --ocean-blue: #00357a;
+  --light-blue: #c2dcff;
+  --brand-black: #000000;
+  --bg-canvas: #f4f8ff;
   /* The route's two greens: walked and next, and what is still ahead (map, ticks, finish). */
   --route-deep: #1b8a3c;
   --route-light: #a9d3b5;
@@ -12,7 +17,7 @@
 
 body {
   margin: 0;
-  background: #fff;
+  background: var(--bg-canvas);
 }
 
 main {
@@ -25,8 +30,47 @@ main {
 button {
   font: inherit;
   padding: 10px 20px;
-  border: 1px solid #08060d;
+  border: 1px solid var(--ocean-blue);
   border-radius: 6px;
-  background: #fff;
+  background: var(--bg-canvas);
   cursor: pointer;
+}
+
+button:hover {
+  background: var(--light-blue);
+  color: var(--ocean-blue);
+}
+
+.app-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  padding: 8px 0;
+  margin-bottom: 16px;
+  background: var(--bg-canvas);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.app-brand {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.app-brand:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.app-logo {
+  height: 50px;
+  width: auto;
+  object-fit: contain;
+  display: block;
 }

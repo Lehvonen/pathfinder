@@ -18,7 +18,7 @@ body:has(.shopping) {
   max-width: 640px;
   margin: 0 auto;
   overflow: hidden;
-  background: #fff;
+  background: var(--bg-canvas);
 }
 
 .shopping__header {
