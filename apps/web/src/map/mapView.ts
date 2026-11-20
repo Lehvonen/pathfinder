@@ -16,17 +16,48 @@ export const PADDING_M = 4;
 export type ScreenSize = { width: number; height: number };
 
 /**
- * What a map of `size` shows to fit `focus`, and how many screen pixels a metre is: the
- * number that keeps nodes, numbers and names the same size on screen at any zoom. Null until
- * the map has been measured, or while it has no width or height.
+ * What the map shows: the box is its SVG `viewBox`, in metres, and the store inside it is
+ * turned `angle` degrees clockwise around the box's centre. No angle is north up: the store
+ * as its data draws it. The box has the screen's shape (a metre is as wide as it is tall), as
+ * every view made here does: the turn is worked out on that assumption.
+ */
+export type MapView = ViewBox & { angle?: number };
+
+/** Degrees to radians, for the map's turn: angles are kept in degrees, as SVG and CSS take them. */
+export const RADIANS_PER_DEGREE = Math.PI / 180;
+
+/** An angle in degrees, brought into -180 up to (not including) 180. */
+export function normalAngle(degrees: number): number {
+  return ((((degrees + 180) % 360) + 360) % 360) - 180;
+}
+
+/**
+ * What a map of `size` turned `angle` degrees shows to fit `focus`, and how many screen pixels
+ * a metre is: the number that keeps nodes, numbers and names the same size on screen at any
+ * zoom. Turned, it fits the box that holds `focus` as it lies on screen, with PADDING_M round
+ * it (the third argument was once the padding; it is now the angle). Null until the map has
+ * been measured, or while it has no width or height.
  */
 export function screenView(
   focus: ViewBox,
   size: ScreenSize | null,
-  padding = PADDING_M,
-): { view: ViewBox; pixelsPerMetre: number } | null {
+  angle = 0,
+): { view: MapView; pixelsPerMetre: number } | null {
   if (size === null || size.width <= 0 || size.height <= 0) return null;
-  const view = fitView(focus, size.width / size.height, padding);
+  const cos = Math.abs(Math.cos(angle * RADIANS_PER_DEGREE));
+  const sin = Math.abs(Math.sin(angle * RADIANS_PER_DEGREE));
+  const width = focus.width * cos + focus.height * sin;
+  const height = focus.width * sin + focus.height * cos;
+  const onScreen = {
+    x: focus.x + (focus.width - width) / 2,
+    y: focus.y + (focus.height - height) / 2,
+    width,
+    height,
+  };
+  const view = {
+    ...fitView(onScreen, size.width / size.height, PADDING_M),
+    angle: normalAngle(angle),
+  };
   return { view, pixelsPerMetre: size.width / view.width };
 }
 
