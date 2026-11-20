@@ -82,7 +82,8 @@ mark {
 .category-result {
   margin-bottom: 4px;
   padding: 8px;
-  background: #f4f7ff;
+  background: #fff;
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
 }
 

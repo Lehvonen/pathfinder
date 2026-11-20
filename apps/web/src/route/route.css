@@ -70,11 +70,11 @@
   min-height: 48px;
 }
 
-/* The one to press: dark and full width, like "Laske reitti" was. */
+/* The one to press: ocean blue and full width, like "Laske reitti". */
 .route-overview__primary {
   font-weight: 600;
   color: #fff;
-  background: #08060d;
+  background: var(--ocean-blue);
 }
 
 /* ── Edit list ──────────────────────────────────────────────── */

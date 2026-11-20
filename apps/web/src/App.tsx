@@ -23,16 +23,14 @@ import SearchBar from './search/SearchBar';
 import SearchResults from './search/SearchResults';
 import { useSearch } from './search/useSearch';
 import { useSearchEngine } from './search/useSearchEngine';
+import { showsTopBar, type Screen } from './screen';
+import TopBar from './TopBar';
 import './search/search.css';
 import './list/list.css';
 import './route/route.css';
 import './map/map.css';
 import './route/shopping.css';
 import './history/history.css';
-import logoUrl from './brand/pathfinder.logo.transparent.png';
-
-/** Which screen is showing; search includes its category pages. */
-type Screen = 'search' | 'route' | 'edit' | 'shopping' | 'finish';
 
 /**
  * The shop under way: the route fixed when "Aloita ostokset" was pressed, and when. Not
@@ -117,6 +115,11 @@ function App() {
     if (list.length === 0) showScreen('search');
     else showRoute();
   };
+  /** The logo: back to search, with any open category closed. */
+  const goHome = () => {
+    setBrowsing(null);
+    showScreen('search');
+  };
   const setQuantity = (id: string, quantity: number) =>
     dispatch({ type: 'setQuantity', id, quantity });
   const remove = (id: string) => dispatch({ type: 'remove', id });
@@ -185,121 +188,109 @@ function App() {
     add({ ...thing.item, id: newItemId(), quantity: 1, checked: false }, thing.name);
 
   return (
-    <main>
-      {screen !== 'shopping' && screen !== 'finish' && (
-        <header className="app-topbar">
-          <button
-            type="button"
-            className="app-brand"
-            aria-label="PathFinder, etusivulle"
-            onClick={() => {
-              setBrowsing(null);
-              showScreen('search');
-            }}
-          >
-            <img src={logoUrl} alt="" className="app-logo" />
-          </button>
-        </header>
-      )}
+    <>
+      {showsTopBar(screen) && <TopBar onHome={goHome} />}
 
-      {screen === 'shopping' && trip !== null ? (
-        <ShoppingPage
-          route={trip.route}
-          names={trip.names}
-          areas={trip.areas}
-          ticked={ticked}
-          onTick={(id, checked) => dispatch({ type: 'setChecked', id, checked })}
-          onBack={() => showScreen('search')}
-          onFinish={finishShopping}
-          unplaced={trip.unplaced}
-        />
-      ) : screen === 'finish' && trip !== null ? (
-        <FinishScreen
-          route={trip.route}
-          areas={trip.areas}
-          elapsedMs={(trip.finishedAt ?? trip.startedAt) - trip.startedAt}
-          picked={pickedCount(list)}
-          onDone={closeTrip}
-        >
-          {trip.askToRemember && (
-            <RememberOffer consent={purchases.consent} onAnswer={purchases.answer} />
-          )}
-        </FinishScreen>
-      ) : screen === 'route' ? (
-        <RouteOverview
-          view={shownView}
-          start={start}
-          onChangeStart={setStart}
-          onEditList={() => showScreen('edit')}
-          onBack={() => showScreen('search')}
-          onRetry={retryRouting}
-          onStartShopping={startShopping}
-        />
-      ) : screen === 'edit' ? (
-        <ListEditPage
-          list={list}
-          onSetQuantity={setQuantity}
-          onRemove={remove}
-          onUntick={untick}
-          onAddMore={() => showScreen('search')}
-          onBack={backFromEdit}
-        />
-      ) : browsing && engine ? (
-        <CategoryPage
-          key={browsing.id}
-          engine={engine}
-          version={version}
-          category={browsing}
-          onBack={() => setBrowsing(null)}
-          onOpenCategory={setBrowsing}
-          onAddProduct={addProduct}
-        />
-      ) : (
-        <>
-          <SearchBar value={search.query} onChange={search.setQuery} />
-          <SearchResults
-            response={search.response}
-            query={search.query}
-            error={error}
-            canShowMore={search.canShowMore}
-            onShowMore={search.showMore}
-            onAddProduct={addProduct}
-            onAddGeneric={addGeneric}
-            onBrowse={setBrowsing}
+      <main>
+        {screen === 'shopping' && trip !== null ? (
+          <ShoppingPage
+            route={trip.route}
+            names={trip.names}
+            areas={trip.areas}
+            ticked={ticked}
+            onTick={(id, checked) => dispatch({ type: 'setChecked', id, checked })}
+            onBack={() => showScreen('search')}
+            onFinish={finishShopping}
+            unplaced={trip.unplaced}
           />
-          {showSuggestions && (
-            <Suggestions
-              things={suggested}
-              onAdd={addSuggestion}
-              onForget={() => {
-                purchases.forget();
-                setNote('Ostohistoria unohdettu. Seuraavat ostokset muistetaan taas.');
-              }}
-              onStop={() => {
-                purchases.answer('no');
-                setNote('Ostohistoria poistettu. Ostoksiasi ei enää muisteta.');
-                noteLine.current?.focus();
-              }}
-            />
-          )}
-        </>
-      )}
-      {screen === 'search' && (
-        <>
-          <p className="search-note" aria-live="polite" ref={noteLine} tabIndex={-1}>
-            {note}
-          </p>
-          {/* Only on search: the route screens replace it (docs/plans/route-map.md). */}
-          <ShoppingList
+        ) : screen === 'finish' && trip !== null ? (
+          <FinishScreen
+            route={trip.route}
+            areas={trip.areas}
+            elapsedMs={(trip.finishedAt ?? trip.startedAt) - trip.startedAt}
+            picked={pickedCount(list)}
+            onDone={closeTrip}
+          >
+            {trip.askToRemember && (
+              <RememberOffer consent={purchases.consent} onAnswer={purchases.answer} />
+            )}
+          </FinishScreen>
+        ) : screen === 'route' ? (
+          <RouteOverview
+            view={shownView}
+            start={start}
+            onChangeStart={setStart}
+            onEditList={() => showScreen('edit')}
+            onBack={() => showScreen('search')}
+            onRetry={retryRouting}
+            onStartShopping={startShopping}
+          />
+        ) : screen === 'edit' ? (
+          <ListEditPage
             list={list}
             onSetQuantity={setQuantity}
             onRemove={remove}
             onUntick={untick}
-            onCalculateRoute={showRoute}
+            onAddMore={() => showScreen('search')}
+            onBack={backFromEdit}
           />
-        </>
-      )}
-    </main>
+        ) : browsing && engine ? (
+          <CategoryPage
+            key={browsing.id}
+            engine={engine}
+            version={version}
+            category={browsing}
+            onBack={() => setBrowsing(null)}
+            onOpenCategory={setBrowsing}
+            onAddProduct={addProduct}
+          />
+        ) : (
+          <>
+            <SearchBar value={search.query} onChange={search.setQuery} />
+            <SearchResults
+              response={search.response}
+              query={search.query}
+              error={error}
+              canShowMore={search.canShowMore}
+              onShowMore={search.showMore}
+              onAddProduct={addProduct}
+              onAddGeneric={addGeneric}
+              onBrowse={setBrowsing}
+            />
+            {showSuggestions && (
+              <Suggestions
+                things={suggested}
+                onAdd={addSuggestion}
+                onForget={() => {
+                  purchases.forget();
+                  setNote('Ostohistoria unohdettu. Seuraavat ostokset muistetaan taas.');
+                }}
+                onStop={() => {
+                  purchases.answer('no');
+                  setNote('Ostohistoria poistettu. Ostoksiasi ei enää muisteta.');
+                  noteLine.current?.focus();
+                }}
+              />
+            )}
+          </>
+        )}
+        {screen === 'search' && (
+          <>
+            <p className="search-note" aria-live="polite" ref={noteLine} tabIndex={-1}>
+              {note}
+            </p>
+            {/* Only on search: the route screens replace it (docs/plans/route-map.md). */}
+            <ShoppingList
+              list={list}
+              onSetQuantity={setQuantity}
+              onRemove={remove}
+              onUntick={untick}
+              onCalculateRoute={showRoute}
+            />
+          </>
+        )}
+      </main>
+    </>
   );
 }
 

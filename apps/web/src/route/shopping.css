@@ -58,7 +58,7 @@ body:has(.shopping) {
   padding: 0 16px calc(12px + env(safe-area-inset-bottom));
   box-sizing: border-box;
   background: #fff;
-  border-top: 2px solid #08060d;
+  border-top: 2px solid var(--ink);
   border-radius: 12px 12px 0 0;
   box-shadow: 0 -4px 12px rgb(0 0 0 / 12%);
   /* Closed, only its top 30 % shows. */
@@ -172,7 +172,7 @@ body:has(.shopping) {
   padding: 0;
   font-size: 22px;
   line-height: 1;
-  border: 2px solid #08060d;
+  border: 2px solid var(--ink);
   border-radius: 50%;
 }
 
@@ -224,7 +224,7 @@ body:has(.shopping) {
   min-height: 48px;
   font-weight: 600;
   color: #fff;
-  background: #08060d;
+  background: var(--ocean-blue);
 }
 
 @keyframes finish-appear {

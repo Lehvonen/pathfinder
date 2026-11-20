@@ -22,6 +22,8 @@ for that.
 | Finish (B)     | The line fills in, a card with the trip in numbers and confetti, "Valmis"                                                                    |
 
 - **The list panel and "Laske reitti" only show on search.** The route screens replace them.
+- **The logo bar shows on search, the route overview and the edit list**, not on shopping or
+  finish (`docs/plans/logo.md`). It takes about 90 px at the top, above the map.
 - **"← Takaisin reittiin"** plans the route again for the list as it is, so removed items
   drop out; an empty list goes back to search.
 

@@ -8,7 +8,7 @@
   padding: 12px;
   font-size: 14px;
   text-align: left;
-  background: #f4f7ff;
+  background: var(--bg-canvas);
   border-radius: 8px;
 }
 
@@ -22,13 +22,13 @@
 }
 
 /* Both answers the same size and weight: no is as easy to say as yes. These override the
-   card's dark, full-width "Valmis" style. */
+   card's blue, full-width "Valmis" style. */
 .finish__card .remember-offer button {
   flex: 1;
   min-height: 44px;
   padding: 0 12px;
   font-weight: 600;
-  color: #08060d;
+  color: var(--ink);
   background: #fff;
 }
 
