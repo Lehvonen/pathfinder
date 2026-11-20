@@ -1,16 +1,21 @@
 import { describe, expect, it } from 'vitest';
+import { RADIANS_PER_DEGREE } from './mapView';
 import {
   clampView,
   glideView,
   MAX_ZOOM_OUT,
   MIN_VIEW_WIDTH,
   panBy,
+  pinchStep,
   pinchView,
   toStore,
   turnAround,
   turnAttribute,
+  TWIST_START,
   twistOf,
   viewBoxAttribute,
+  WHEEL_TURN,
+  wheelTurn,
   zoomAround,
   type ScreenPoint,
 } from './panZoom';
@@ -22,6 +27,11 @@ const quarter = { ...view, angle: 90 };
 const size = { width: 400, height: 200 };
 const store = { x: 0, y: 0, width: 100, height: 120 };
 const centre = { x: 200, y: 100 };
+// Two fingers 100 px apart, either side of the centre.
+const apart = [
+  { x: 150, y: 100 },
+  { x: 250, y: 100 },
+] as const;
 
 /** Turning works in sines and cosines, so turned points are compared to within rounding. */
 function expectNear(actual: ScreenPoint, expected: ScreenPoint) {
@@ -152,11 +162,8 @@ describe('pinchView', () => {
   });
 
   describe('twisting', () => {
-    // Fingers either side of the centre, turned a quarter clockwise around it.
-    const from = [
-      { x: 150, y: 100 },
-      { x: 250, y: 100 },
-    ] as const;
+    // The fingers `apart`, turned a quarter clockwise around the centre.
+    const from = apart;
     const to = [
       { x: 200, y: 50 },
       { x: 200, y: 150 },
@@ -198,6 +205,73 @@ describe('pinchView', () => {
     const same = { x: 100, y: 100 };
     const pinched = pinchView(view, size, [same, same], [same, { x: 110, y: 100 }]);
     expect(Number.isFinite(pinched.width)).toBe(true);
+  });
+});
+
+describe('pinchStep', () => {
+  // The fingers `apart`, twisted `degrees` clockwise around the centre.
+  const from = apart;
+  const twisted = (degrees: number) => {
+    const cos = 50 * Math.cos(degrees * RADIANS_PER_DEGREE);
+    const sin = 50 * Math.sin(degrees * RADIANS_PER_DEGREE);
+    return [
+      { x: 200 - cos, y: 100 - sin },
+      { x: 200 + cos, y: 100 + sin },
+    ] as const;
+  };
+
+  it('does not turn the map for a twist short of the start', () => {
+    const step = pinchStep(view, size, from, twisted(TWIST_START - 0.1), false);
+    expect(step.view.angle).toBe(0);
+    expect(step.turning).toBe(false);
+    expect(step.restart).toBe(false);
+  });
+
+  it('starts turning once the twist passes the start, drawing that frame unturned', () => {
+    const step = pinchStep(view, size, from, twisted(TWIST_START + 0.1), false);
+    expect(step.view.angle).toBe(0);
+    expect(step.turning).toBe(true);
+    expect(step.restart).toBe(true);
+  });
+
+  it('does not jump: past the start, the twist counts from where it crossed', () => {
+    // Frames as the hook runs them: a restart starts over from that frame's view and fingers.
+    const crossingFingers = twisted(TWIST_START + 0.1);
+    const crossing = pinchStep(view, size, from, crossingFingers, false);
+    const [start, fingers] = crossing.restart ? [crossing.view, crossingFingers] : [view, from];
+    const next = pinchStep(start, size, fingers, twisted(TWIST_START + 0.6), crossing.turning);
+    // Half a degree more than where it crossed, not the whole twist from the first touch.
+    expect(next.view.angle).toBeCloseTo(0.5);
+  });
+
+  it('starts turning for an anticlockwise twist past the start too, not one short of it', () => {
+    const past = pinchStep(view, size, from, twisted(-(TWIST_START + 0.1)), false);
+    expect(past.turning).toBe(true);
+    expect(past.restart).toBe(true);
+    const short = pinchStep(view, size, from, twisted(-(TWIST_START - 0.1)), false);
+    expect(short.turning).toBe(false);
+  });
+
+  it('turns with the fingers once turning, however little they twist', () => {
+    const step = pinchStep(view, size, from, twisted(3), true);
+    expect(step.view.angle).toBeCloseTo(3);
+    expect(step.turning).toBe(true);
+    expect(step.restart).toBe(false);
+  });
+});
+
+describe('wheelTurn', () => {
+  it('turns clockwise as the wheel scrolls down', () => {
+    expect(wheelTurn(0, 100)).toBeCloseTo(100 * WHEEL_TURN);
+    expect(wheelTurn(0, -100)).toBeCloseTo(-100 * WHEEL_TURN);
+  });
+
+  it('takes a sideways scroll when the browser sends Shift that way', () => {
+    expect(wheelTurn(100, 0)).toBeCloseTo(100 * WHEEL_TURN);
+  });
+
+  it('goes by the up-and-down scroll when a scroll is both ways, as on a trackpad', () => {
+    expect(wheelTurn(50, 100)).toBeCloseTo(100 * WHEEL_TURN);
   });
 });
 

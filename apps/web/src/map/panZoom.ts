@@ -163,6 +163,36 @@ export function pinchView(
 }
 
 /**
+ * One frame of a two-finger pinch: the view to show, whether the pinch turns the map from now
+ * on, and whether to `restart` it from this view with the fingers where they are now. A twist
+ * turns the map only once it passes TWIST_START, so a pinch that isn't quite straight doesn't
+ * tilt it. The frame it passes on is drawn unturned and the twist then counts from there, so
+ * the map doesn't jump by TWIST_START.
+ */
+export function pinchStep(
+  start: MapView,
+  size: ScreenSize,
+  from: readonly [ScreenPoint, ScreenPoint],
+  to: readonly [ScreenPoint, ScreenPoint],
+  turning: boolean,
+): { view: MapView; turning: boolean; restart: boolean } {
+  const view = pinchView(start, size, from, to, turning);
+  const starts = !turning && Math.abs(twistOf(from, to)) > TWIST_START;
+  return { view, turning: turning || starts, restart: starts };
+}
+
+/** How fast Shift and the wheel turn the map: degrees per pixel scrolled, about 15° a notch. */
+export const WHEEL_TURN = 0.15;
+
+/**
+ * How far a Shift scroll turns the map, clockwise in degrees. Some browsers send a Shift
+ * scroll sideways, as `deltaX`, so that counts when `deltaY` is nothing.
+ */
+export function wheelTurn(deltaX: number, deltaY: number): number {
+  return (deltaY !== 0 ? deltaY : deltaX) * WHEEL_TURN;
+}
+
+/**
  * The view kept usable: no closer than MIN_VIEW_WIDTH, no further out than MAX_ZOOM_OUT
  * times the store (both around the view's centre, keeping its shape), and its centre inside
  * the store, so the store can't be pushed off screen. The angle is left as it is.

@@ -1,46 +1,61 @@
 import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react';
-import type { ScreenSize, ViewBox } from './mapView';
-import { clampView, panBy, pinchView, zoomAround, type ScreenPoint } from './panZoom';
+import type { MapView, ScreenSize, ViewBox } from './mapView';
+import {
+  clampView,
+  panBy,
+  pinchStep,
+  turnAround,
+  wheelTurn,
+  zoomAround,
+  type ScreenPoint,
+} from './panZoom';
 
-/** What a gesture starts from, as the map was last drawn. */
-export type PanZoomState = { view: ViewBox; size: ScreenSize; store: ViewBox };
+/** The view, size and store as React last drew them: where a gesture starts if nothing else
+ *  is on screen (see `showing`), and the limits it keeps to. */
+export type PanZoomState = { view: MapView; size: ScreenSize; store: ViewBox };
 
 type PanZoomOptions = {
   /** The element the gestures are on: the map's box. */
   target: RefObject<HTMLElement | null>;
   /** The view and sizes as drawn, or null before the map is measured. */
   state: PanZoomState | null;
+  /** The view on screen right now, if it isn't `state.view`: part way through a glide. A
+   *  gesture starts from it, so grabbing a gliding map doesn't make it jump. */
+  showing(): MapView | null;
   /** A frame of a gesture: show this view. At most once per screen refresh. */
-  onFrame(view: ViewBox): void;
+  onFrame(view: MapView): void;
   /** The gesture ended on this view. Not called for a tap that moved nothing. */
-  onEnd(view: ViewBox): void;
+  onEnd(view: MapView): void;
 };
 
-/** A wheel zoom counts as ended once the wheel has been still this long. */
+/** A wheel zoom or turn counts as ended once the wheel has been still this long. */
 const WHEEL_END_MS = 150;
 /** How fast the wheel zooms: a factor per pixel scrolled. */
 const WHEEL_ZOOM = 0.002;
 
 /**
- * Pinch, pan and wheel zoom on `target` (docs/plans/route-map.md §4). Gestures never
- * re-render React: each frame goes to `onFrame`, which changes the view directly, once per
- * screen refresh. Only `onEnd` reaches React, once per gesture, so sizes on screen can be
- * worked out again for the new zoom. The maths is in `panZoom.ts`, which is tested; this hook
- * only listens to the pointers.
+ * Pinch, pan, twist and wheel zoom on `target`, and Shift with the wheel to turn
+ * (docs/plans/route-map.md §4). A twist turns the map only once it passes TWIST_START
+ * (`pinchStep`). Gestures never re-render React: each frame goes to `onFrame`, which changes
+ * the view directly, once per screen refresh. Only `onEnd` reaches React, once per gesture, so
+ * sizes on screen can be worked out again for the new zoom. The maths, and when a twist starts
+ * turning, is in `panZoom.ts`, which is tested; this hook only listens to the pointers.
  */
-export function usePanZoom({ target, state, onFrame, onEnd }: PanZoomOptions): void {
-  const latest = useRef({ state, onFrame, onEnd });
+export function usePanZoom({ target, state, showing, onFrame, onEnd }: PanZoomOptions): void {
+  const latest = useRef({ state, showing, onFrame, onEnd });
   useLayoutEffect(() => {
-    latest.current = { state, onFrame, onEnd };
+    latest.current = { state, showing, onFrame, onEnd };
   });
 
   useEffect(() => {
     const element = target.current;
     if (element === null) return;
     const pointers = new Map<number, ScreenPoint>();
-    let start: { view: ViewBox; points: ScreenPoint[] } | null = null;
+    let start: { view: MapView; points: ScreenPoint[] } | null = null;
     /** The view the gesture shows now; null between gestures. */
-    let shown: ViewBox | null = null;
+    let shown: MapView | null = null;
+    /** Whether this pinch has twisted past TWIST_START, and so turns the map. */
+    let turning = false;
     let frame = 0;
     let wheelTimer = 0;
 
@@ -48,7 +63,7 @@ export function usePanZoom({ target, state, onFrame, onEnd }: PanZoomOptions): v
       const box = element.getBoundingClientRect();
       return { x: event.clientX - box.left, y: event.clientY - box.top };
     };
-    const show = (view: ViewBox, store: ViewBox) => {
+    const show = (view: MapView, store: ViewBox) => {
       shown = clampView(view, store);
       if (frame === 0) {
         frame = requestAnimationFrame(() => {
@@ -58,15 +73,24 @@ export function usePanZoom({ target, state, onFrame, onEnd }: PanZoomOptions): v
       }
     };
     const end = () => {
+      // A frame still waiting would be lost with `shown`: draw it first, so the view on screen
+      // is the one the gesture ends on, and React has nothing to glide to.
+      if (frame !== 0) {
+        cancelAnimationFrame(frame);
+        frame = 0;
+        if (shown !== null) latest.current.onFrame(shown);
+      }
       if (shown !== null) latest.current.onEnd(shown);
       shown = null;
     };
+    /** The view on screen now: this gesture's, else a glide's, else the one React drew. */
+    const onScreen = (now: PanZoomState) => shown ?? latest.current.showing() ?? now.view;
     /** Starts over from the view as it is now, with the fingers now down. */
     const restart = () => {
       const now = latest.current.state;
       start =
         now !== null && pointers.size > 0
-          ? { view: shown ?? now.view, points: [...pointers.values()] }
+          ? { view: onScreen(now), points: [...pointers.values()] }
           : null;
     };
 
@@ -74,6 +98,9 @@ export function usePanZoom({ target, state, onFrame, onEnd }: PanZoomOptions): v
       if (event.pointerType === 'mouse' && event.button !== 0) return;
       element.setPointerCapture(event.pointerId);
       pointers.set(event.pointerId, local(event));
+      // Turning holds while two or more fingers stay down: a new pair starts unturned, but a
+      // third finger going down, or one of three lifting, doesn't stop a turning pinch.
+      if (pointers.size <= 2) turning = false;
       restart();
     };
     const move = (event: PointerEvent) => {
@@ -85,11 +112,15 @@ export function usePanZoom({ target, state, onFrame, onEnd }: PanZoomOptions): v
       if (b === undefined && startB === undefined) {
         show(panBy(start.view, now.size, a!.x - startA!.x, a!.y - startA!.y), now.store);
       } else if (b !== undefined && startB !== undefined) {
-        show(pinchView(start.view, now.size, [startA!, startB], [a!, b]), now.store);
+        const step = pinchStep(start.view, now.size, [startA!, startB], [a!, b], turning);
+        show(step.view, now.store);
+        turning = step.turning;
+        if (step.restart) restart();
       }
     };
     const up = (event: PointerEvent) => {
       if (!pointers.delete(event.pointerId)) return;
+      if (pointers.size < 2) turning = false;
       if (pointers.size === 0) {
         start = null;
         end();
@@ -101,8 +132,14 @@ export function usePanZoom({ target, state, onFrame, onEnd }: PanZoomOptions): v
       const now = latest.current.state;
       if (now === null) return;
       event.preventDefault();
-      const factor = Math.exp(-event.deltaY * WHEEL_ZOOM);
-      show(zoomAround(shown ?? now.view, now.size, local(event), factor), now.store);
+      const from = onScreen(now);
+      if (event.shiftKey) {
+        const degrees = wheelTurn(event.deltaX, event.deltaY);
+        show(turnAround(from, now.size, local(event), degrees), now.store);
+      } else {
+        const factor = Math.exp(-event.deltaY * WHEEL_ZOOM);
+        show(zoomAround(from, now.size, local(event), factor), now.store);
+      }
       window.clearTimeout(wheelTimer);
       wheelTimer = window.setTimeout(end, WHEEL_END_MS);
     };

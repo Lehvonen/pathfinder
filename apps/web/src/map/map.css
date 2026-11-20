@@ -45,6 +45,15 @@
   pointer-events: none;
 }
 
+/* Names and stop numbers stay level however the map is turned: each turns back by the map's
+   turn (--map-turn, in degrees, set by StoreMap) around its own middle. */
+.store-map__label,
+.store-map__number {
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: rotate(calc(var(--map-turn, 0) * -1deg));
+}
+
 /* ── The route ────────────────────────────────────────────── */
 
 .store-map__leg {
