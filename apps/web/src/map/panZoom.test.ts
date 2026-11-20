@@ -5,9 +5,11 @@ import {
   glideView,
   MAX_ZOOM_OUT,
   MIN_VIEW_WIDTH,
+  NORTH_SNAP,
   panBy,
   pinchStep,
   pinchView,
+  snapNorth,
   toStore,
   turnAround,
   turnAttribute,
@@ -300,6 +302,25 @@ describe('clampView', () => {
     const clamped = clampView({ x: 500, y: -400, width: 20, height: 10 }, store);
     expect(clamped.x + clamped.width / 2).toBe(100);
     expect(clamped.y + clamped.height / 2).toBe(0);
+  });
+});
+
+describe('snapNorth', () => {
+  it('puts a view that ended near north straight to north, either side', () => {
+    expect(snapNorth({ ...view, angle: NORTH_SNAP })).toEqual(view);
+    expect(snapNorth({ ...view, angle: -NORTH_SNAP })).toEqual(view);
+    expect(snapNorth({ ...view, angle: -3 })).toEqual(view);
+  });
+
+  it('leaves a view turned further than that as it is, either side', () => {
+    const clockwise = { ...view, angle: NORTH_SNAP + 0.01 };
+    const anticlockwise = { ...view, angle: -NORTH_SNAP - 0.01 };
+    expect(snapNorth(clockwise)).toBe(clockwise);
+    expect(snapNorth(anticlockwise)).toBe(anticlockwise);
+  });
+
+  it('gives a view with no angle an angle of 0', () => {
+    expect(snapNorth({ x: 0, y: 0, width: 100, height: 50 }).angle).toBe(0);
   });
 });
 

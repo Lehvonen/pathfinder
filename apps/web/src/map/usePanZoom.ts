@@ -96,6 +96,10 @@ export function usePanZoom({ target, state, showing, onFrame, onEnd }: PanZoomOp
 
     const down = (event: PointerEvent) => {
       if (event.pointerType === 'mouse' && event.button !== 0) return;
+      // A button over the map (the north button) keeps its own taps: capturing the pointer here
+      // would take its click away. Only one inside the map: a map inside a button still pans.
+      const control = event.target instanceof Element ? event.target.closest('button') : null;
+      if (control !== null && element.contains(control)) return;
       element.setPointerCapture(event.pointerId);
       pointers.set(event.pointerId, local(event));
       // Turning holds while two or more fingers stay down: a new pair starts unturned, but a

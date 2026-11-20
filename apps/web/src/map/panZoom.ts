@@ -19,6 +19,8 @@ export const MAX_ZOOM_OUT = 1.5;
 /** How far two fingers twist, in degrees, before the map starts turning with them: less is
  *  taken for a pinch that wasn't quite straight. */
 export const TWIST_START = 10;
+/** How near north up, in degrees, a turn may end and be put straight to north. */
+export const NORTH_SNAP = 5;
 
 /** A store offset as it lies on screen once the map is turned `degrees` clockwise. */
 function turned(offset: ScreenPoint, degrees: number): ScreenPoint {
@@ -207,6 +209,15 @@ export function clampView(view: MapView, store: ViewBox): MapView {
   const centreX = clamp(centre.x, store.x, store.x + store.width);
   const centreY = clamp(centre.y, store.y, store.y + store.height);
   return { ...view, x: centreX - width / 2, y: centreY - height / 2, width, height };
+}
+
+/**
+ * A view a gesture ended on, put straight to north up if it is within NORTH_SNAP of it, so a
+ * map turned almost back isn't left a little crooked. It turns around its centre, so only the
+ * angle changes.
+ */
+export function snapNorth(view: MapView): MapView {
+  return Math.abs(view.angle ?? 0) <= NORTH_SNAP ? { ...view, angle: 0 } : view;
 }
 
 /**
