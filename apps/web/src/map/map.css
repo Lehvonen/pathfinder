@@ -45,6 +45,57 @@
   pointer-events: none;
 }
 
+/* Names and stop numbers stay level however the map is turned: each turns back by the map's
+   turn (--map-turn, in degrees, set by StoreMap) around its own middle. */
+.store-map__label,
+.store-map__number {
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: rotate(calc(var(--map-turn, 0) * -1deg));
+}
+
+/* The north button (CompassButton), top right while the map is turned. Its needle turns with
+   the map, live during a gesture, to point to the store's north. */
+.store-map__compass {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.15);
+}
+
+@media (hover: hover) {
+  .store-map__compass:hover {
+    background: var(--light-blue);
+  }
+}
+
+/* After the hover, so a press shows with a mouse too. */
+.store-map__compass:active {
+  background: color-mix(in srgb, var(--light-blue) 80%, var(--ocean-blue));
+}
+
+.store-map__compass svg {
+  width: 24px;
+  height: 24px;
+  transform: rotate(calc(var(--map-turn, 0) * 1deg));
+}
+
+.store-map__needle-north {
+  fill: var(--ocean-blue);
+}
+
+.store-map__needle-south {
+  fill: #c4c4c4;
+}
+
 /* ── The route ────────────────────────────────────────────── */
 
 .store-map__leg {

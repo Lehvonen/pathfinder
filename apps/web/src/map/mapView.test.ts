@@ -7,12 +7,24 @@ import {
   labelPoint,
   legsOf,
   legStates,
+  normalAngle,
   routeFocus,
   storeBounds,
   screenView,
   shortLabel,
   showsLabels,
 } from './mapView';
+
+describe('normalAngle', () => {
+  it('brings any angle into -180 up to 180', () => {
+    expect(normalAngle(190)).toBe(-170);
+    expect(normalAngle(-190)).toBe(170);
+    expect(normalAngle(360)).toBe(0);
+    expect(normalAngle(180)).toBe(-180);
+    expect(normalAngle(-180)).toBe(-180);
+    expect(normalAngle(45)).toBe(45);
+  });
+});
 
 describe('screenView', () => {
   const focus = { x: 10, y: 10, width: 40, height: 20 };
@@ -30,6 +42,34 @@ describe('screenView', () => {
     const shown = screenView(focus, { width: 600, height: 200 })!;
     expect(shown.view.width).toBe(84);
     expect(shown.pixelsPerMetre).toBeCloseTo(600 / 84);
+  });
+
+  // A quarter turn either way lays 40 × 20 on its side: 20 × 40, plus padding 28 × 48, which a
+  // 360 × 480 map makes 36 × 48.
+  it.each([90, -90])(
+    'fits the focus as it lies on a map turned %i°, keeping its centre',
+    (angle) => {
+      const shown = screenView(focus, { width: 360, height: 480 }, angle)!;
+      expect(shown.view.angle).toBe(angle);
+      expect(shown.view.width).toBeCloseTo(36);
+      expect(shown.view.height).toBeCloseTo(48);
+      expect(shown.view.x + shown.view.width / 2).toBeCloseTo(30);
+      expect(shown.view.y + shown.view.height / 2).toBeCloseTo(20);
+    },
+  );
+
+  it('fits the box round a focus turned part way', () => {
+    // At 45° the 40 × 20 focus needs 60 / √2 ≈ 42.43 each way: plus padding 50.43 square,
+    // which a 360 × 480 map makes 50.43 × 67.24.
+    const shown = screenView(focus, { width: 360, height: 480 }, 45)!;
+    expect(shown.view.width).toBeCloseTo(50.43, 2);
+    expect(shown.view.height).toBeCloseTo(67.24, 2);
+    expect(shown.view.x + shown.view.width / 2).toBeCloseTo(30);
+    expect(shown.view.y + shown.view.height / 2).toBeCloseTo(20);
+  });
+
+  it('keeps the angle it is given in -180 up to 180', () => {
+    expect(screenView(focus, { width: 360, height: 480 }, 450)!.view.angle).toBe(90);
   });
 
   it('is null until the map is measured, or while it has no size', () => {
