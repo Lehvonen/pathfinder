@@ -19,7 +19,7 @@ body:has(.shopping-list) {
   padding: 4px 16px calc(12px + env(safe-area-inset-bottom));
   box-sizing: border-box;
   background: #fff;
-  border-top: 2px solid #08060d;
+  border-top: 2px solid var(--ink);
   box-shadow: 0 -4px 12px rgb(0 0 0 / 12%);
 }
 
@@ -72,7 +72,7 @@ body:has(.shopping-list) {
   margin-top: 8px;
   font-weight: 600;
   color: #fff;
-  background: #08060d;
+  background: var(--ocean-blue);
 }
 
 .shopping-list__route:disabled {
@@ -105,8 +105,11 @@ body:has(.shopping-list) {
   text-decoration: line-through;
 }
 
+/* Its own background as well as its colour, so the default hover (index.css) changes
+   neither: green text on the hover's light blue is too faint. */
 .list-row__untick {
   color: var(--route-deep);
+  background: var(--bg-canvas);
   border-color: var(--route-deep);
 }
 

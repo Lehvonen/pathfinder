@@ -4,15 +4,32 @@
     'Segoe UI',
     Roboto,
     sans-serif;
-  color: #08060d;
+  color: var(--ink);
+
+  --ocean-blue: #00357a;
+  --light-blue: #c2dcff;
+  /* Text, and the dark lines that frame the list and the shopping sheet. */
+  --ink: #08060d;
+  --bg-canvas: #f4f8ff;
   /* The route's two greens: walked and next, and what is still ahead (map, ticks, finish). */
   --route-deep: #1b8a3c;
   --route-light: #a9d3b5;
+  --border-subtle: #e5e7eb;
+
+  /* The logo bar, built from its parts so its height always matches them. Sticky elements
+     below the bar stick at --topbar-height. */
+  --logo-height: 50px;
+  --logo-padding: 4px;
+  --topbar-padding: 8px;
+  --topbar-border: 1px;
+  --topbar-height: calc(
+    var(--logo-height) + 2 * var(--logo-padding) + 2 * var(--topbar-padding) + var(--topbar-border)
+  );
 }
 
 body {
   margin: 0;
-  background: #fff;
+  background: var(--bg-canvas);
 }
 
 main {
@@ -22,11 +39,66 @@ main {
   box-sizing: border-box;
 }
 
-button {
+/* Zero specificity, like the hover rule below: the hover wins by coming later, and any
+   rule with a class beats both. */
+:where(button) {
   font: inherit;
   padding: 10px 20px;
-  border: 1px solid #08060d;
+  border: 1px solid var(--ocean-blue);
   border-radius: 6px;
-  background: #fff;
+  background: var(--bg-canvas);
   cursor: pointer;
+}
+
+/* A button keeps whichever of background and colour its own rule sets. Only where the
+   pointer can hover, so the colour doesn't stick after a tap. */
+@media (hover: hover) {
+  :where(button:not(:disabled):hover) {
+    background: var(--light-blue);
+    color: var(--ocean-blue);
+  }
+
+  .app-brand:hover {
+    background: color-mix(in srgb, var(--ocean-blue) 6%, transparent);
+  }
+}
+
+/* Full width, outside <main>, so it is the page's banner landmark. */
+.app-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  box-sizing: border-box;
+  height: var(--topbar-height);
+  padding: var(--topbar-padding) 0;
+  margin-bottom: 16px;
+  background: var(--bg-canvas);
+  border-bottom: var(--topbar-border) solid var(--border-subtle);
+}
+
+/* Lines the logo up with the 640px column below. */
+.app-topbar__inner {
+  max-width: 640px;
+  height: 100%;
+  margin: 0 auto;
+  padding: 0 16px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+}
+
+.app-brand {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--logo-padding) 8px;
+  background: none;
+  border: none;
+  border-radius: 8px;
+}
+
+.app-logo {
+  height: var(--logo-height);
+  width: auto;
+  object-fit: contain;
+  display: block;
 }
