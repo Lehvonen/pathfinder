@@ -1,7 +1,7 @@
 # Plan: the route map and shopping screens
 
 **Status:** PR A (overview, edit list, map) merged (#29), PR B (shopping, finish) merged
-(#30), PR C (gestures) built. **A rough draft, not a source of truth**: a prototype to be polished later. Where this
+(#30), PR C (gestures) merged (#31), PR D (turning the map) built. **A rough draft, not a source of truth**: a prototype to be polished later. Where this
 file and the code disagree, the code wins.
 **Architecture refs:** §9 (routing), §11 (list builder, map view, trip summary), §14
 (performance targets)
@@ -30,8 +30,10 @@ for that.
 ## 2. The map (PR A)
 
 `apps/web/src/map/`: `mapView.ts` (what to show at what size, leg states, labels; tested),
-`StoreMap.tsx`, `map.css`. Plain geometry (`boundsOf`, `fitView`, `pathData`) is in
-`packages/core/src/geometry.ts`, as ARCHITECTURE.md §17 asks.
+`StoreMap.tsx`, `CompassButton.tsx` (the north button), `map.css`. Plain geometry (`boundsOf`, `fitView`, `pathData`) is in
+`packages/core/src/geometry.ts`, as ARCHITECTURE.md §17 asks. The view's own maths (pan,
+zoom, turn, angles: `panZoom.ts`, `mapView.ts`) stays in `apps/web/src/map/`, since only
+this app uses it.
 
 - **The store's areas as filled grey shapes**, no outlines. **No other lines**: no aisles,
   no walk graph.
@@ -69,15 +71,30 @@ for that.
 - **The overview map is `55svh` tall**, not `dvh`: it keeps its size while a phone's
   address bar shows and hides, so nothing jumps or redraws while scrolling.
 - **Gestures change the view directly, outside React** (`usePanZoom`): each frame sets the
-  SVG's `viewBox`, at most once per screen refresh, and React redraws only once, when the
-  gesture ends, so node and name sizes fit the new zoom. No gesture library. The maths
-  (`panZoom.ts`: pan, pinch around the fingers, wheel zoom around the mouse, the limits) is
-  tested.
+  SVG's `viewBox` and the store's turn, at most once per screen refresh, and React redraws
+  only once, when the gesture ends, so node and name sizes fit the new zoom. No gesture
+  library. The maths (`panZoom.ts`: pan, pinch and twist around the fingers, when a twist
+  starts turning, wheel zoom and turn around the mouse, the limits, the snap to north) is
+  tested. A gesture started during a glide starts from what is on screen when the finger goes
+  down; the glide runs on until the finger moves, so the first move can pull the map back a
+  little.
+- **Turning:** a view is its box plus an angle, the store turned around the box's centre (one
+  SVG `rotate` on the store). Two fingers turn the map once they twist past 10°, so a pinch
+  that isn't quite straight doesn't tilt it; the twist then counts from there, with no jump.
+  On a PC, Shift and the mouse wheel turn it, about 15° a notch. Names and stop numbers turn
+  back by the same angle (one CSS variable, `--map-turn`), so they stay level. A turn that
+  ends within 5° of north settles to north, with the usual glide (at once with reduced motion, and on the finish map,
+  which never glides).
+  Once a turn ends (the fingers lifted, or the wheel still for 0.15 s), a turned map shows a north
+  button top right ("Pohjoinen ylös"), its needle turning with the map, that turns it back the
+  same way; focus then moves to the map, since the button goes away. Each screen's map starts north up:
+  a turn on the overview doesn't carry into shopping, and the finish is drawn north up.
 - **Limits:** no closer than 12 m across, no further out than 1.5 times the store, and the
-  view's centre kept inside the store.
+  view's centre kept inside the store. Any angle.
 - **The glide:** a new focus (the next leg) glides there in 0.25 s from whatever is on screen,
-  a pan or zoom included; at once with reduced motion. The view the shopper chose holds until
-  the focus changes.
+  a pan, zoom or turn included, turning the short way round; at once with reduced motion. The
+  view the shopper chose holds until the focus changes; the angle holds after that too, and
+  the new focus is fitted as it lies on the turned map.
 - **No extra download:** the map uses `graph.json` and `areas.json`, already loaded.
 
 ## 5. Shopping (PR B) and gestures (PR C)
@@ -101,7 +118,9 @@ for that.
   the visible 30 % and scrolls, so a stop with many items never runs off the screen. No
   pull-to-refresh while shopping: a reload keeps the list but leaves the shop for search.
 - **Zoom:** fits the leg to the next stop automatically on every move (`legFocus`, cached so
-  a tick that doesn't move the route on doesn't redraw the map), gliding there; pinch and pan to look around.
+  a tick that doesn't move the route on doesn't redraw the map), gliding there; pinch and pan to look around,
+  and twist to turn the map the way the shopper faces. The turn stays from leg to leg until
+  the north button, or a turn back to near north, undoes it.
 - **Finish:** once every stop is done the sheet says "Kaikki kerätty – kassalle!" with
   "Lopeta ostokset". The finish screen draws the whole route's legs in, one after another,
   over 1.2 s whatever the route's length (widths in metres while filling: with fixed screen
@@ -114,8 +133,10 @@ for that.
 - **No start or checkout marker** on the map yet: the line simply starts and ends there.
 - **Names show only zoomed in**, so the overview of a whole store on a phone has none
   (about 3.4 px/m). Above 7 px/m, 4 pairs on the real map still touch (e.g. "Kala" and
-  "Valmisruoka, vege"), and "Itsepalvelukassat" is wider than its area: tune the line or
-  the cut length when zooming arrives (B, C).
+  "Valmisruoka, vege"), and "Itsepalvelukassat" is wider than its area, all measured north
+  up: tune the line or the cut length. On a turned map names stay level while their areas
+  turn under them, so which ones touch changes with the angle: an area wide north up is tall
+  and narrow turned a quarter, and its name runs across its neighbours.
 - **A reload mid-shop leaves the shop**: the list and its ticks are kept
   (`docs/plans/device-storage.md`), but the app opens on search and the trip time restarts.
 - **Recalculating mid-shop starts from the entrance**, not from where the shopper is.
@@ -126,3 +147,14 @@ for that.
 - **The shopping screen's wiring in `App.tsx`** (fixing the route, the finish, "Valmis") has
   no tests: the web app has no component or hook tests yet. The logic it uses
   (`progress.ts`) is tested.
+- **The map's wiring has no tests either:** `usePanZoom` (listening to the pointers and the
+  wheel, a third finger, a button over the map) and `StoreMap` (the kept angle, the snap, the
+  north button, focus after it). The maths and the decisions they use (`panZoom.ts`,
+  `mapView.ts`) are tested.
+- **No keyboard or button way to pan, zoom or turn the map:** gestures and the wheel only.
+  The north button is the only control, and it shows only once the map is turned.
+- **A view chosen by a gesture outlives a change of size:** it is kept until the focus
+  changes, so after a phone is turned sideways it no longer has the screen's shape (which the
+  turn maths assumes, `MapView`). The SVG then fits it with bars at the sides, and gestures
+  slide a little under the fingers. Fix: drop the chosen view on a new size, or refit it
+  round its centre.

@@ -121,7 +121,7 @@ Revisit only after submission, if the app is actually being used.
 | Build tool         | Vite                                                                                                                 | Fast dev server, simple PWA plugin                                   |
 | Styling            | Tailwind CSS                                                                                                         | Fast iteration, no CSS architecture debate                           |
 | Map rendering      | Hand-written inline SVG                                                                                              | Own coordinate system, not geographic tiles                          |
-| Pan / zoom         | `d3-zoom` (only this module)                                                                                         | Pinch-zoom without pulling in all of D3                              |
+| Pan / zoom / turn  | Own pointer and wheel handling (`usePanZoom.ts`, maths in `panZoom.ts`)                                              | No dependency, and it turns the map too, which d3-zoom can't (§17)   |
 | Pathfinding        | Own Dijkstra (or `ngraph.path`)                                                                                      | Small, and it is the interesting part of the report                  |
 | TSP                | Own implementation                                                                                                   | Held-Karp + 2-opt, written in-house                                  |
 | Search             | `packages/search`: own scan over three pre-sorted tiers; FlexSearch only if the phone bench needs it (§10)           | Works offline; no index to build at startup; fits the core budget    |
@@ -724,8 +724,9 @@ zoomed to the leg to the next stop, and a sheet with that stop's items, each wit
 once all are ticked the route moves on (unticking steps back), and the sheet opens to the
 whole list. After the last stop, "Lopeta ostokset" shows the finish: the route drawn in,
 the trip in numbers, green confetti, and "Valmis" back to search with an empty list.
-Every store map can be pinched, panned and wheel-zoomed, with no React render during the
-gesture, and glides to the next leg; the sheet can be dragged by its heading. Plan:
+Every store map can be pinched, panned, twisted and wheel-zoomed (Shift and the wheel turn
+it), with no React render during a gesture; a turned map shows a north button. The shopping
+map glides to the next leg; the sheet can be dragged by its heading. Plan:
 `docs/plans/route-map.md`.
 
 ### Offline
@@ -895,7 +896,7 @@ Monday. This outranks every checkbox below.
 - [x] Purchase history and suggestions: opt-in, on the device only, "Usein ostamasi" on search, withdrawal always reachable (§11, `docs/plans/device-storage.md`)
 - [ ] SVG map: shelf polygons, route legs, numbered pins _(rough version at department level: area shapes, the route in green, numbered nodes; shelf polygons wait for the detailed map)_
 - [ ] Three path states; animated current leg _(three states done, rough: walked and next deep green, ahead light green; not animated)_
-- [ ] Auto-zoom to current leg, full-route toggle _(auto-zoom with a glide on the shopping screen; the overview shows the full route; pinch and pan anywhere)_
+- [ ] Auto-zoom to current leg, full-route toggle _(auto-zoom with a glide on the shopping screen; the overview shows the full route; pinch, pan and twist anywhere, with a north button)_
 - [x] Check-off advances the map _(ticks on the shopping screen; a stop is done when all its items are ticked)_
 - [x] Trip summary: stops, distance, time _(on the route overview; minutes rough, at 1 m/s plus 20 s per stop)_
 - [ ] Route-mode toggle (TSP / serpentine)
@@ -1287,6 +1288,7 @@ time to fix what it reveals.
 | Products with no Kupittaa location         | **Not searchable**; `normalise.ts` excludes them as `no-location`, listed in `report.md`                                                                                                                                                          | They cannot be routed, and they are web-shop items (mostly clothing and shoes) that k-ruoka.fi shows no store location for either                                                   |
 | List and history storage                   | **`localStorage` on the device only**; versioned keys, checked on read                                                                                                                                                                            | No backend, as for shared lists; the data is small and read synchronously, so the list shows on the first render                                                                    |
 | Consent for list and history               | **None for the list; opt-in for the history**, asked on the finish card until answered, off by default; withdrawal always one tap away on search                                                                                                  | The ePrivacy rule on storing data on a device exempts only what is strictly necessary for a service the user asked for: their own list is, suggestions are not                      |
+| Pan and zoom library                       | **None: own gestures** (`usePanZoom.ts`, maths in `panZoom.ts`) instead of `d3-zoom`                                                                                                                                                              | Pinch, pan and wheel zoom were small enough to write and test (#31); turning the map needs rotation, which d3-zoom doesn't do                                                       |
 
 ### Documented as future work, not as oversights
 
